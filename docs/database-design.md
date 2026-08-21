@@ -149,7 +149,8 @@ MVP 首个 schema **不创建 `raw_result` 列**。`result` 只允许保存通�
 
 - Select：`auth.uid() = user_id`。
 - Insert：`auth.uid() = user_id`，或只开放不接受 `user_id` 的 security invoker RPC。
-- Update/Delete：同时使用 `using (auth.uid() = user_id)` 和 `with check (auth.uid() = user_id)`。
+- 已开放的 Update/Delete：同时使用 `using (auth.uid() = user_id)` 和 `with check (auth.uid() = user_id)`。
+- RLS owner 条件不能代替操作权限控制；只允许公共 Repository 合同需要的表操作，服务端状态必须通过受控 RPC、Edge Function 或 service role 写入。
 - 子记录归属不仅靠 RLS，还必须由复合外键或数据库函数验证。
 - service role 只在受控 Edge Function 使用，绝不进入 App。
 - 所有 RLS 测试至少覆盖用户 A 可访问自己的数据、用户 A 无法 select/insert/update/delete 用户 B 数据、匿名用户无法访问。
@@ -170,9 +171,10 @@ MVP 首个 schema **不创建 `raw_result` 列**。`result` 只允许保存通�
 
 ## 7. Migration 实施状态
 
-- 初始 Schema migration：`20260821000100_initial_schema.sql`。
+- 初始 Schema migration：`20260821000100_initial_schema.sql`；权限收紧 migration：`20260822000100_restrict_authenticated_permissions.sql`。
 - Auth 用户删除级联删除其 profile 和全部业务数据。
 - Client 删除级联删除其 projects；Project 删除级联删除 requirements 和 tasks；Upload 删除级联删除尚未被业务来源关系保护的 extraction。
 - Requirement 到 source extraction、Task 到 requirement、Extraction 到 confirmed client/project 使用受限删除，避免静默丢失来源或幂等确认关系。
-- 7 张 MVP 表均启用并强制 RLS。`authenticated` 的策略按 select/insert/update/delete 分离，所有权表达式使用缓存式 `(select auth.uid())`；`anon` 不具备表权限。
+- 7 张 MVP 表均启用并强制 RLS，所有权表达式使用缓存式 `(select auth.uid())`；`anon` 不具备表权限。
+- `authenticated` 权限矩阵：profiles 为 select 和 `display_name` 列 update；clients 为 select 及公共 Create/Update DTO 列写入；projects 为 select 及公共 Create/Update DTO 列写入，其中 `client_id` 只允许 insert；requirements、tasks、uploads、ai_extractions 为 owner select-only。ID、owner、创建时间及 Upload/Extraction 状态、Provider、模型结果和确认字段只能由数据库默认值或后续受控服务端入口写入。
 - Schema 与 RLS 验证位于 `supabase/tests/database`；无 Docker 环境的 migration/RLS 回归测试位于 `supabase/tests/migration.test.mjs`。

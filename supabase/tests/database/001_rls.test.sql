@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(13);
+select plan(18);
 
 insert into auth.users (id)
 values
@@ -120,6 +120,20 @@ values
     'User B Task'
   );
 
+select throws_ok(
+  $$
+    insert into public.requirements (user_id, project_id, content)
+    values (
+      '00000000-0000-4000-8000-00000000a001',
+      '00000000-0000-4000-8000-00000000b201',
+      'Forged cross-tenant requirement'
+    )
+  $$,
+  '23503',
+  null,
+  'composite foreign key rejects a child attached to another user project'
+);
+
 set local role authenticated;
 select set_config(
   'request.jwt.claim.sub',
@@ -159,17 +173,14 @@ select is(
   'user A cannot update user B client'
 );
 
-select is(
-  (
-    with removed as (
-      delete from public.clients
-      where id = '00000000-0000-4000-8000-00000000b101'
-      returning id
-    )
-    select count(*)::integer from removed
-  ),
-  0,
-  'user A cannot delete user B client'
+select throws_ok(
+  $$
+    delete from public.clients
+    where id = '00000000-0000-4000-8000-00000000b101'
+  $$,
+  '42501',
+  null,
+  'authenticated users cannot directly delete clients'
 );
 
 select throws_ok(
@@ -181,9 +192,79 @@ select throws_ok(
       'Forged cross-tenant requirement'
     )
   $$,
-  '23503',
+  '42501',
   null,
-  'composite foreign key rejects a child attached to another user project'
+  'authenticated users cannot directly insert requirements'
+);
+
+select throws_ok(
+  $$
+    insert into public.uploads (
+      id,
+      storage_path,
+      mime_type,
+      byte_size,
+      status
+    )
+    values (
+      '00000000-0000-4000-8000-00000000a302',
+      '00000000-0000-4000-8000-00000000a001/00000000-0000-4000-8000-00000000a302/source',
+      'image/png',
+      1,
+      'completed'
+    )
+  $$,
+  '42501',
+  null,
+  'authenticated users cannot forge completed uploads'
+);
+
+select throws_ok(
+  $$
+    update public.uploads
+    set status = 'completed'
+    where id = '00000000-0000-4000-8000-00000000a301'
+  $$,
+  '42501',
+  null,
+  'authenticated users cannot update upload state'
+);
+
+select throws_ok(
+  $$
+    insert into public.ai_extractions (
+      upload_id,
+      status,
+      provider,
+      model,
+      result
+    )
+    values (
+      '00000000-0000-4000-8000-00000000a301',
+      'needs_review',
+      'forged-provider',
+      'forged-model',
+      '{"schemaVersion": 1}'::jsonb
+    )
+  $$,
+  '42501',
+  null,
+  'authenticated users cannot insert forged extractions'
+);
+
+select throws_ok(
+  $$
+    update public.ai_extractions
+    set
+      status = 'needs_review',
+      provider = 'forged-provider',
+      model = 'forged-model',
+      result = '{"schemaVersion": 1}'::jsonb
+    where id = '00000000-0000-4000-8000-00000000a401'
+  $$,
+  '42501',
+  null,
+  'authenticated users cannot update extraction server fields'
 );
 
 reset role;

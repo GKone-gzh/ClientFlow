@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(6);
+select plan(8);
 
 select is(
   (
@@ -76,8 +76,68 @@ select is(
       )
       and roles = array['authenticated']::name[]
   ),
-  28,
-  'each table has authenticated select, insert, update, and delete policies'
+  12,
+  'authenticated policies match the least-privilege repository surface'
+);
+
+select is(
+  (
+    select count(*)::integer
+    from (
+      values
+        ('profiles', false, false, false),
+        ('clients', false, false, false),
+        ('projects', false, false, false),
+        ('requirements', false, false, false),
+        ('tasks', false, false, false),
+        ('uploads', false, false, false),
+        ('ai_extractions', false, false, false)
+    ) as expected (table_name, can_insert, can_update, can_delete)
+    where has_table_privilege(
+      'authenticated',
+      format('public.%I', table_name),
+      'SELECT'
+    )
+      and has_table_privilege(
+        'authenticated',
+        format('public.%I', table_name),
+        'INSERT'
+      ) = can_insert
+      and has_table_privilege(
+        'authenticated',
+        format('public.%I', table_name),
+        'UPDATE'
+      ) = can_update
+      and has_table_privilege(
+        'authenticated',
+        format('public.%I', table_name),
+        'DELETE'
+      ) = can_delete
+  ),
+  7,
+  'authenticated table grants match the approved permission matrix'
+);
+
+select is(
+  (
+    select count(*)::integer
+    from (
+      values
+        ('profiles', 'display_name', 'UPDATE'),
+        ('clients', 'name', 'INSERT'),
+        ('clients', 'name', 'UPDATE'),
+        ('projects', 'client_id', 'INSERT'),
+        ('projects', 'name', 'UPDATE')
+    ) as expected (table_name, column_name, privilege_name)
+    where has_column_privilege(
+      'authenticated',
+      format('public.%I', table_name),
+      column_name,
+      privilege_name
+    )
+  ),
+  5,
+  'authenticated writes are limited to public contract columns'
 );
 
 select is(

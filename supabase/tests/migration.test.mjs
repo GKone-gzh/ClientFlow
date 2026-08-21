@@ -1,14 +1,12 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import test from "node:test";
 import { URL } from "node:url";
 
 import { PGlite } from "@electric-sql/pglite";
 
-const migrationUrl = new URL(
-  "../migrations/20260821000100_initial_schema.sql",
-  import.meta.url,
-);
+const migrationsDirectoryUrl = new URL("../migrations/", import.meta.url);
+const migrationFilePattern = /^(?<version>\d{14})_[a-z0-9_]+\.sql$/;
 
 const userA = "00000000-0000-4000-8000-00000000a001";
 const userB = "00000000-0000-4000-8000-00000000b001";
@@ -39,8 +37,51 @@ async function createDatabase() {
   const db = new PGlite();
   await db.waitReady;
   await db.exec(bootstrapSql);
-  await db.exec(await readFile(migrationUrl, "utf8"));
+
+  for (const migration of await readMigrations()) {
+    await db.exec(migration.sql);
+  }
+
   return db;
+}
+
+async function readMigrations() {
+  const entries = await readdir(migrationsDirectoryUrl, { withFileTypes: true });
+  const fileNames = entries
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".sql"))
+    .map((entry) => entry.name)
+    .sort((left, right) => left.localeCompare(right));
+
+  assert.ok(fileNames.length > 0, "at least one SQL migration is required");
+
+  const versions = fileNames.map((fileName) => {
+    const match = migrationFilePattern.exec(fileName);
+    assert.ok(match, `invalid migration filename: ${fileName}`);
+    return match.groups.version;
+  });
+
+  assert.equal(
+    new Set(versions).size,
+    versions.length,
+    "migration timestamp prefixes must be unique",
+  );
+
+  const migrations = [];
+  for (const fileName of fileNames) {
+    const fileUrl = new URL(fileName, migrationsDirectoryUrl);
+    let sql;
+
+    try {
+      sql = await readFile(fileUrl, "utf8");
+    } catch (error) {
+      throw new Error(`failed to read migration: ${fileName}`, { cause: error });
+    }
+
+    assert.ok(sql.trim().length > 0, `migration is empty: ${fileName}`);
+    migrations.push({ fileName, sql });
+  }
+
+  return migrations;
 }
 
 test("initial migration creates the contracted schema and forced RLS", async () => {
@@ -71,12 +112,128 @@ test("initial migration creates the contracted schema and forced RLS", async () 
     );
 
     const policies = await db.query(`
-      select count(*)::integer as count
+      select policyname
       from pg_catalog.pg_policies
       where schemaname = 'public'
         and roles = array['authenticated']::name[]
+      order by policyname
     `);
-    assert.equal(policies.rows[0].count, 28);
+    assert.deepEqual(
+      policies.rows.map(({ policyname }) => policyname),
+      [
+        "ai_extractions_select_own",
+        "clients_insert_own",
+        "clients_select_own",
+        "clients_update_own",
+        "profiles_select_own",
+        "profiles_update_own",
+        "projects_insert_own",
+        "projects_select_own",
+        "projects_update_own",
+        "requirements_select_own",
+        "tasks_select_own",
+        "uploads_select_own",
+      ],
+    );
+
+    const privileges = await db.query(`
+      select
+        table_name,
+        has_table_privilege('authenticated', 'public.' || table_name, 'SELECT') as can_select,
+        has_table_privilege('authenticated', 'public.' || table_name, 'INSERT') as can_insert,
+        has_table_privilege('authenticated', 'public.' || table_name, 'UPDATE') as can_update,
+        has_table_privilege('authenticated', 'public.' || table_name, 'DELETE') as can_delete
+      from (
+        values
+          ('profiles'),
+          ('clients'),
+          ('projects'),
+          ('requirements'),
+          ('tasks'),
+          ('uploads'),
+          ('ai_extractions')
+      ) as expected_tables (table_name)
+      order by table_name
+    `);
+    assert.deepEqual(privileges.rows, [
+      {
+        table_name: "ai_extractions",
+        can_select: true,
+        can_insert: false,
+        can_update: false,
+        can_delete: false,
+      },
+      {
+        table_name: "clients",
+        can_select: true,
+        can_insert: false,
+        can_update: false,
+        can_delete: false,
+      },
+      {
+        table_name: "profiles",
+        can_select: true,
+        can_insert: false,
+        can_update: false,
+        can_delete: false,
+      },
+      {
+        table_name: "projects",
+        can_select: true,
+        can_insert: false,
+        can_update: false,
+        can_delete: false,
+      },
+      {
+        table_name: "requirements",
+        can_select: true,
+        can_insert: false,
+        can_update: false,
+        can_delete: false,
+      },
+      {
+        table_name: "tasks",
+        can_select: true,
+        can_insert: false,
+        can_update: false,
+        can_delete: false,
+      },
+      {
+        table_name: "uploads",
+        can_select: true,
+        can_insert: false,
+        can_update: false,
+        can_delete: false,
+      },
+    ]);
+
+    const columnPrivileges = await db.query(`
+      select
+        has_column_privilege('authenticated', 'public.profiles', 'display_name', 'UPDATE') as profile_display_name_update,
+        has_column_privilege('authenticated', 'public.profiles', 'created_at', 'UPDATE') as profile_created_at_update,
+        has_column_privilege('authenticated', 'public.clients', 'name', 'INSERT') as client_name_insert,
+        has_column_privilege('authenticated', 'public.clients', 'name', 'UPDATE') as client_name_update,
+        has_column_privilege('authenticated', 'public.clients', 'user_id', 'INSERT') as client_user_id_insert,
+        has_column_privilege('authenticated', 'public.clients', 'created_at', 'UPDATE') as client_created_at_update,
+        has_column_privilege('authenticated', 'public.projects', 'client_id', 'INSERT') as project_client_id_insert,
+        has_column_privilege('authenticated', 'public.projects', 'client_id', 'UPDATE') as project_client_id_update,
+        has_column_privilege('authenticated', 'public.projects', 'name', 'UPDATE') as project_name_update,
+        has_column_privilege('authenticated', 'public.projects', 'created_at', 'UPDATE') as project_created_at_update
+    `);
+    assert.deepEqual(columnPrivileges.rows, [
+      {
+        profile_display_name_update: true,
+        profile_created_at_update: false,
+        client_name_insert: true,
+        client_name_update: true,
+        client_user_id_insert: false,
+        client_created_at_update: false,
+        project_client_id_insert: true,
+        project_client_id_update: false,
+        project_name_update: true,
+        project_created_at_update: false,
+      },
+    ]);
 
     const enums = await db.query(`
       select type.typname, array_agg(enum.enumlabel order by enum.enumsortorder) as labels
@@ -140,6 +297,17 @@ test("RLS and composite foreign keys isolate two authenticated users", async () 
         'User B Project'
       );
 
+    `);
+
+    await assert.rejects(
+      db.exec(`
+        insert into public.requirements (user_id, project_id, content)
+        values ('${userA}', '${projectB}', 'Forged Requirement')
+      `),
+      /foreign key constraint/i,
+    );
+
+    await db.exec(`
       set role authenticated;
       select set_config('request.jwt.claim.sub', '${userA}', false);
     `);
@@ -159,7 +327,7 @@ test("RLS and composite foreign keys isolate two authenticated users", async () 
         insert into public.clients (user_id, name)
         values ('${userB}', 'Forged Client')
       `),
-      /row-level security policy/i,
+      /permission denied/i,
     );
 
     const changed = await db.query(`
@@ -171,11 +339,16 @@ test("RLS and composite foreign keys isolate two authenticated users", async () 
     assert.equal(changed.rows.length, 0);
 
     await assert.rejects(
+      db.exec(`delete from public.clients where id = '${clientB}'`),
+      /permission denied/i,
+    );
+
+    await assert.rejects(
       db.exec(`
         insert into public.requirements (user_id, project_id, content)
         values ('${userA}', '${projectB}', 'Forged Requirement')
       `),
-      /foreign key constraint/i,
+      /permission denied/i,
     );
   } finally {
     await db.close();
@@ -206,42 +379,41 @@ test("anonymous users have neither table privileges nor data access", async () =
   }
 });
 
-test("database constraints reject malformed upload and extraction metadata", async () => {
+test("constraints and least privilege protect ingestion metadata", async () => {
   const db = await createDatabase();
   const uploadId = "00000000-0000-4000-8000-00000000a701";
+  const extractionId = "00000000-0000-4000-8000-00000000a801";
 
   try {
     await db.exec(`
       insert into auth.users (id) values ('${userA}');
-      set role authenticated;
-      select set_config('request.jwt.claim.sub', '${userA}', false);
-    `);
-
-    const validUpload = await db.query(`
       insert into public.uploads (
         id,
+        user_id,
         storage_path,
         mime_type,
         byte_size
       )
       values (
         '${uploadId}',
+        '${userA}',
         '${userA}/${uploadId}/source',
         'image/png',
         10485760
-      )
-      returning user_id
+      );
+      insert into public.ai_extractions (id, user_id, upload_id)
+      values ('${extractionId}', '${userA}', '${uploadId}');
     `);
-    assert.deepEqual(validUpload.rows, [{ user_id: userA }]);
 
     await assert.rejects(
       db.exec(`
         insert into public.uploads (
+          user_id,
           storage_path,
           mime_type,
           byte_size
         )
-        values ('${userB}/forged/source', 'image/png', 1024)
+        values ('${userA}', '${userB}/forged/source', 'image/png', 1024)
       `),
       /uploads_storage_path_canonical/i,
     );
@@ -250,12 +422,14 @@ test("database constraints reject malformed upload and extraction metadata", asy
       db.exec(`
         insert into public.uploads (
           id,
+          user_id,
           storage_path,
           mime_type,
           byte_size
         )
         values (
           '00000000-0000-4000-8000-00000000a702',
+          '${userA}',
           '${userA}/00000000-0000-4000-8000-00000000a702/source',
           'image/gif',
           1024
@@ -268,12 +442,14 @@ test("database constraints reject malformed upload and extraction metadata", asy
       db.exec(`
         insert into public.uploads (
           id,
+          user_id,
           storage_path,
           mime_type,
           byte_size
         )
         values (
           '00000000-0000-4000-8000-00000000a703',
+          '${userA}',
           '${userA}/00000000-0000-4000-8000-00000000a703/source',
           'image/webp',
           10485761
@@ -284,10 +460,85 @@ test("database constraints reject malformed upload and extraction metadata", asy
 
     await assert.rejects(
       db.exec(`
-        insert into public.ai_extractions (upload_id, result)
-        values ('${uploadId}', '{"client": {}}'::jsonb)
+        update public.ai_extractions
+        set result = '{"client": {}}'::jsonb
+        where id = '${extractionId}'
       `),
       /ai_extractions_result_schema_version_matches/i,
+    );
+
+    await db.exec(`
+      set role authenticated;
+      select set_config('request.jwt.claim.sub', '${userA}', false);
+    `);
+
+    const ownClient = await db.query(`
+      insert into public.clients (name)
+      values ('Session-owned Client')
+      returning user_id
+    `);
+    assert.deepEqual(ownClient.rows, [{ user_id: userA }]);
+
+    await assert.rejects(
+      db.exec(`
+        insert into public.uploads (
+          id,
+          storage_path,
+          mime_type,
+          byte_size,
+          status
+        )
+        values (
+          '00000000-0000-4000-8000-00000000a704',
+          '${userA}/00000000-0000-4000-8000-00000000a704/source',
+          'image/png',
+          1,
+          'completed'
+        )
+      `),
+      /permission denied/i,
+    );
+
+    await assert.rejects(
+      db.exec(`
+        update public.uploads
+        set status = 'completed'
+        where id = '${uploadId}'
+      `),
+      /permission denied/i,
+    );
+
+    await assert.rejects(
+      db.exec(`
+        insert into public.ai_extractions (
+          upload_id,
+          status,
+          provider,
+          model,
+          result
+        )
+        values (
+          '${uploadId}',
+          'needs_review',
+          'forged-provider',
+          'forged-model',
+          '{"schemaVersion": 1}'::jsonb
+        )
+      `),
+      /permission denied/i,
+    );
+
+    await assert.rejects(
+      db.exec(`
+        update public.ai_extractions
+        set
+          status = 'needs_review',
+          provider = 'forged-provider',
+          model = 'forged-model',
+          result = '{"schemaVersion": 1}'::jsonb
+        where id = '${extractionId}'
+      `),
+      /permission denied/i,
     );
   } finally {
     await db.close();
