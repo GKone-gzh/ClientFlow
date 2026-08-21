@@ -5,11 +5,13 @@
   "packageManager": "pnpm@11.19.0",
   "scripts": {
     "build": "pnpm -r --if-present build",
-    "lint": "eslint packages/contracts/src",
-    "test": "pnpm -r --if-present test",
+    "lint": "eslint packages/contracts/src supabase/tests/migration.test.mjs",
+    "test": "pnpm run test:db && pnpm -r --if-present test",
+    "test:db": "node --test supabase/tests/migration.test.mjs",
     "typecheck": "pnpm -r --if-present typecheck"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.5",
     "@eslint/js": "^10.0.1",
     "eslint": "^10.0.1",
     "typescript-eslint": "^8.41.0"

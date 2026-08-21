@@ -108,9 +108,9 @@
 |---|---|---|
 | `id` | `uuid` | PK default `gen_random_uuid()` |
 | `user_id` | `uuid` | not null |
-| `storage_path` | `text` | not null unique，必须位于该用户路径前缀 |
-| `mime_type` | `text` | not null，MVP 仅允许批准的图片 MIME |
-| `byte_size` | `bigint` | not null，必须 > 0 且不超过服务端限制 |
+| `storage_path` | `text` | not null unique，严格等于 `{user_id}/{id}/source` |
+| `mime_type` | `text` | not null，MVP 仅允许 `image/jpeg`、`image/png`、`image/webp` |
+| `byte_size` | `bigint` | not null，必须 > 0 且不超过 10 MiB（`10485760` bytes） |
 | `status` | `upload_status` | not null default `pending` |
 | `error_code` | `text` | nullable，不保存 Secret 或图片内容 |
 | `created_at` | `timestamptz` | not null default `now()` |
@@ -167,3 +167,12 @@ MVP 首个 schema **不创建 `raw_result` 列**。`result` 只允许保存通�
 ## 6. 原子确认
 
 窗口2应实现一个受测试的事务函数/RPC，用于 `ConfirmExtractionInput`：锁定 extraction、验证 owner/status/schema、检查是否已确认、创建全部业务实体、写回确认 ID 并返回结果。任何一步失败必须整体回滚；重复请求返回第一次创建的 ID，不得重复插入。
+
+## 7. Migration 实施状态
+
+- 初始 Schema migration：`20260821000100_initial_schema.sql`。
+- Auth 用户删除级联删除其 profile 和全部业务数据。
+- Client 删除级联删除其 projects；Project 删除级联删除 requirements 和 tasks；Upload 删除级联删除尚未被业务来源关系保护的 extraction。
+- Requirement 到 source extraction、Task 到 requirement、Extraction 到 confirmed client/project 使用受限删除，避免静默丢失来源或幂等确认关系。
+- 7 张 MVP 表均启用并强制 RLS。`authenticated` 的策略按 select/insert/update/delete 分离，所有权表达式使用缓存式 `(select auth.uid())`；`anon` 不具备表权限。
+- Schema 与 RLS 验证位于 `supabase/tests/database`；无 Docker 环境的 migration/RLS 回归测试位于 `supabase/tests/migration.test.mjs`。
