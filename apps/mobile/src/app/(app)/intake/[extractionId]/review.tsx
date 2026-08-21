@@ -50,9 +50,10 @@ export default function IntakeReviewScreen() {
 
   const submit = handleSubmit((result) => {
     confirmMutation.mutate(result, {
-      onSuccess: ({ clientId }) => {
+      onSuccess: (state) => {
+        if (state.status !== "confirmed" || !state.confirmation) return;
         resetIntake();
-        router.replace(`/(app)/clients/${clientId}`);
+        router.replace(`/(app)/clients/${state.confirmation.clientId}`);
       },
     });
   });
@@ -194,8 +195,10 @@ export default function IntakeReviewScreen() {
           {Object.keys(formState.errors).length > 0 ? (
             <Text accessibilityRole="alert">请修正表单中的无效内容。</Text>
           ) : null}
-          {confirmMutation.isError ? (
-            <Text accessibilityRole="alert">创建客户失败，请重试。</Text>
+          {confirmMutation.isError || confirmMutation.data?.status === "failed" ? (
+            <Text accessibilityRole="alert">
+              {confirmMutation.data?.failure?.error.message ?? "创建客户失败，请重试。"}
+            </Text>
           ) : null}
           <Button
             title={confirmMutation.isPending ? "创建中..." : "确认并创建客户"}

@@ -1,52 +1,61 @@
 import { create } from "zustand";
 
-import type { MockAIScenario } from "@/services/ai/mock-ai-provider";
+import type { IntakeWorkflowState } from "@/features/intake/intake-workflow";
 import type { PreparedScreenshot } from "@/services/images/screenshot-service";
 
 export type IntakeStage =
   | "idle"
   | "selecting"
   | "compressing"
-  | "uploading"
-  | "processing"
-  | "success"
-  | "failed";
-
-export interface IntakeFlowError {
-  code: string;
-  message: string;
-  retryable: boolean;
-}
+  | IntakeWorkflowState["status"]
+  | "success";
 
 interface IntakeFlowState {
-  error: IntakeFlowError | null;
+  error: IntakeWorkflowState["failure"] | null;
   extractionId: string | null;
-  lastScenario: MockAIScenario;
+  operationId: string | null;
   screenshot: PreparedScreenshot | null;
   stage: IntakeStage;
+  workflow: IntakeWorkflowState | null;
   reset: () => void;
-  setError: (error: IntakeFlowError) => void;
-  setExtractionId: (extractionId: string) => void;
-  setScenario: (scenario: MockAIScenario) => void;
-  setScreenshot: (screenshot: PreparedScreenshot | null) => void;
+  setError: (error: IntakeWorkflowState["failure"]) => void;
+  setScreenshot: (
+    screenshot: PreparedScreenshot | null,
+    operationId?: string | null,
+  ) => void;
   setStage: (stage: IntakeStage) => void;
+  setWorkflow: (workflow: IntakeWorkflowState) => void;
 }
 
 const INITIAL_STATE = {
   error: null,
   extractionId: null,
-  lastScenario: "complete" as const,
+  operationId: null,
   screenshot: null,
   stage: "idle" as const,
+  workflow: null,
 };
 
 export const useIntakeFlowStore = create<IntakeFlowState>((set) => ({
   ...INITIAL_STATE,
   reset: () => set(INITIAL_STATE),
   setError: (error) => set({ error, stage: "failed" }),
-  setExtractionId: (extractionId) =>
-    set({ error: null, extractionId, stage: "success" }),
-  setScenario: (lastScenario) => set({ lastScenario }),
-  setScreenshot: (screenshot) => set({ error: null, screenshot }),
+  setScreenshot: (screenshot, operationId = null) =>
+    set({
+      error: null,
+      extractionId: null,
+      operationId,
+      screenshot,
+      workflow: null,
+    }),
   setStage: (stage) => set({ error: null, stage }),
+  setWorkflow: (workflow) =>
+    set({
+      error: workflow.failure,
+      extractionId: workflow.extractionId,
+      operationId: workflow.operationId,
+      stage:
+        workflow.status === "awaiting_review" ? "success" : workflow.status,
+      workflow,
+    }),
 }));

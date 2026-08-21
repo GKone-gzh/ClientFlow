@@ -6,28 +6,32 @@ import {
 } from "@clientflow/contracts";
 
 import { clientKeys } from "@/features/clients/client-queries";
+import { confirmIntakeWorkflow } from "@/features/intake/intake-workflow";
 import { taskKeys } from "@/features/tasks/task-queries";
-import { appServices } from "@/services/app-services";
+import { useAppServices } from "@/services/app-service-provider";
 
 export const intakeKeys = {
   detail: (extractionId: EntityId) => ["intake", extractionId] as const,
 };
 
 export function useExtractionResultQuery(extractionId: EntityId) {
+  const services = useAppServices();
   return useQuery({
     queryKey: intakeKeys.detail(extractionId),
-    queryFn: () => appServices.intake.getValidatedResult(extractionId),
+    queryFn: () => services.intake.getValidatedResult(extractionId),
   });
 }
 
 export function useConfirmExtractionMutation(extractionId: EntityId) {
+  const services = useAppServices();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (result: AIExtractionResult) => {
       const validated = AIExtractionResultSchema.parse(result);
-      return appServices.intake.confirm({ extractionId, result: validated });
+      return confirmIntakeWorkflow({ services, extractionId, result: validated });
     },
-    onSuccess: async () => {
+    onSuccess: async (state) => {
+      if (state.status !== "confirmed") return;
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: clientKeys.all }),
         queryClient.invalidateQueries({ queryKey: taskKeys.all }),

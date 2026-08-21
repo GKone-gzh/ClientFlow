@@ -8,9 +8,6 @@ import type {
   UploadRepository,
 } from "@clientflow/contracts";
 
-import { createMockIntakeServices } from "@/mocks/mock-intake-services";
-import { createMockRepositories } from "@/mocks/mock-repositories";
-
 export interface AppServices {
   extractions: AIExtractionRepository;
   intake: IntakeService;
@@ -21,14 +18,17 @@ export interface AppServices {
   uploads: UploadRepository;
 }
 
-const mockRepositories = createMockRepositories();
-const mockIntakeServices = createMockIntakeServices(
-  mockRepositories.store,
-  mockRepositories,
-);
+export interface DevelopmentIntakeScenario {
+  id: string;
+  label: string;
+}
 
-export const appServices: AppServices = {
-  ...mockRepositories,
-  ...mockIntakeServices,
-};
-export const mockStore = mockRepositories.store;
+export interface DevelopmentTools {
+  intakeScenarios: readonly DevelopmentIntakeScenario[];
+  selectIntakeScenario(id: string): void;
+}
+
+export interface AppServiceComposition {
+  services: AppServices;
+  developmentTools: DevelopmentTools | null;
+}

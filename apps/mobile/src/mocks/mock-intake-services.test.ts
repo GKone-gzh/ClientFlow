@@ -8,10 +8,11 @@ import { createMockRepositories } from "./mock-repositories";
 async function runScenario(scenario: "complete" | "invalid" | "failure") {
   const repositories = createMockRepositories();
   const services = createMockIntakeServices(repositories.store, repositories);
+  services.controller.setScenario(scenario);
   const prepared = await services.uploads.prepare({
     mimeType: "image/jpeg",
     byteSize: 1000,
-    originalFileName: `mock-${scenario}--chat.jpg`,
+    originalFileName: "chat.jpg",
   });
   await services.uploads.markUploaded(prepared.uploadId);
   const extraction = await services.intake.requestExtraction(prepared.uploadId);

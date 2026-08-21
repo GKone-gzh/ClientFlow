@@ -1,8 +1,14 @@
 import { router } from "expo-router";
 
-import { IntakeServiceError } from "@/mocks/mock-intake-services";
-import { appServices } from "@/services/app-services";
-import type { MockAIScenario } from "@/services/ai/mock-ai-provider";
+import {
+  createIntakeOperationId,
+  runIntakeWorkflow,
+  type IntakeWorkflowFailure,
+} from "@/features/intake/intake-workflow";
+import {
+  useAppServices,
+  useDevelopmentTools,
+} from "@/services/app-service-provider";
 import {
   ScreenshotSelectionError,
   selectAndCompressScreenshot,
@@ -15,8 +21,21 @@ const ERROR_MESSAGES: Record<string, string> = {
   validation_failed: "AI 返回内容不符合数据格式，请重新识别。",
 };
 
+function displayFailure(failure: IntakeWorkflowFailure | null) {
+  if (!failure) return null;
+  return {
+    ...failure.error,
+    message:
+      failure.error.retryable
+        ? (ERROR_MESSAGES[failure.error.code] ?? failure.error.message)
+        : failure.error.message,
+  };
+}
+
 export function useIntakeWorkflow() {
   const state = useIntakeFlowStore();
+  const services = useAppServices();
+  const developmentTools = useDevelopmentTools();
 
   const selectScreenshot = async () => {
     state.setStage("selecting");
@@ -24,85 +43,70 @@ export function useIntakeWorkflow() {
       state.setStage("compressing");
       const screenshot = await selectAndCompressScreenshot();
       if (!screenshot) {
-        state.setStage(state.screenshot ? "idle" : "idle");
+        state.setStage("idle");
         return;
       }
-      state.setScreenshot(screenshot);
+      state.setScreenshot(screenshot, createIntakeOperationId());
       state.setStage("idle");
     } catch (error) {
       state.setError({
-        code: "validation_failed",
-        message:
-          error instanceof ScreenshotSelectionError
-            ? error.message
-            : "图片处理失败，请重新选择。",
-        retryable: false,
+        step: "upload",
+        error: {
+          code: "validation_failed",
+          message:
+            error instanceof ScreenshotSelectionError
+              ? error.message
+              : "图片处理失败，请重新选择。",
+          retryable: false,
+        },
       });
     }
   };
 
-  const processScreenshot = async (scenario: MockAIScenario) => {
-    const screenshot = useIntakeFlowStore.getState().screenshot;
-    if (!screenshot) {
-      state.setError({
-        code: "validation_failed",
-        message: "请先选择一张聊天截图。",
-        retryable: false,
+  const processScreenshot = async (retry = false) => {
+    const current = useIntakeFlowStore.getState();
+    if (!current.screenshot) {
+      current.setError({
+        step: "upload",
+        error: {
+          code: "validation_failed",
+          message: "请先选择一张聊天截图。",
+          retryable: false,
+        },
       });
       return;
     }
 
-    state.setScenario(scenario);
-    state.setStage("uploading");
-    try {
-      const prepared = await appServices.uploads.prepare({
-        mimeType: screenshot.mimeType,
-        byteSize: screenshot.byteSize,
-        originalFileName: `mock-${scenario}--${screenshot.fileName}`,
-      });
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      await appServices.uploads.markUploaded(prepared.uploadId);
-
-      state.setStage("processing");
-      const extraction = await appServices.intake.requestExtraction(prepared.uploadId);
-      if (extraction.status === "failed") {
-        const code = extraction.errorCode ?? "extraction_failed";
-        throw new IntakeServiceError(
-          code === "validation_failed" ? "validation_failed" : "extraction_failed",
-          "Extraction failed",
-          true,
-        );
-      }
-      const result = await appServices.intake.getValidatedResult(extraction.id);
-      if (!result) {
-        throw new IntakeServiceError(
-          "extraction_failed",
-          "Extraction result is not ready",
-          true,
-        );
-      }
-
-      state.setExtractionId(extraction.id);
-      router.push(`/(app)/intake/${extraction.id}/review`);
-    } catch (error) {
-      const serviceError = error instanceof IntakeServiceError ? error : null;
-      const code = serviceError?.code ?? "internal_error";
-      state.setError({
-        code,
-        message: ERROR_MESSAGES[code] ?? "处理失败，请重试。",
-        retryable: serviceError?.retryable ?? true,
-      });
+    const operationId = current.operationId ?? createIntakeOperationId();
+    const result = await runIntakeWorkflow({
+      services,
+      screenshot: current.screenshot,
+      operationId,
+      previous: retry ? current.workflow : null,
+      onStateChange: current.setWorkflow,
+    });
+    if (result.status === "awaiting_review" && result.extractionId) {
+      router.push(`/(app)/intake/${result.extractionId}/review`);
     }
+  };
+
+  const processDevelopmentScenario = async (scenarioId: string) => {
+    if (!developmentTools) return;
+    developmentTools.selectIntakeScenario(scenarioId);
+    await processScreenshot(false);
   };
 
   return {
     ...state,
+    developmentScenarios: developmentTools?.intakeScenarios ?? [],
+    error: displayFailure(state.error),
     cancel: () => {
       state.reset();
       router.back();
     },
-    processScreenshot,
-    retry: () => processScreenshot(state.lastScenario),
+    processDevelopmentScenario,
+    processScreenshot: () => processScreenshot(false),
+    retry: () => processScreenshot(true),
     selectScreenshot,
   };
 }

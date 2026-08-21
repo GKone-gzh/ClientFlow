@@ -8,14 +8,17 @@ const STAGE_LABELS = {
   selecting: "正在选择图片...",
   compressing: "正在验证并压缩图片...",
   uploading: "正在上传截图...",
-  processing: "AI 正在识别...",
+  extracting: "AI 正在识别...",
+  awaiting_review: "识别完成，正在进入确认页面...",
+  confirming: "正在确认...",
+  confirmed: "创建完成...",
   success: "识别完成，正在进入确认页面...",
   failed: null,
 } as const;
 
 export default function IntakeUploadScreen() {
   const workflow = useIntakeWorkflow();
-  const isBusy = ["selecting", "compressing", "uploading", "processing"].includes(
+  const isBusy = ["selecting", "compressing", "uploading", "extracting"].includes(
     workflow.stage,
   );
 
@@ -48,20 +51,19 @@ export default function IntakeUploadScreen() {
         <>
           <Button
             title="开始识别"
-            onPress={() => void workflow.processScreenshot("complete")}
+            onPress={() => void workflow.processScreenshot()}
           />
-          <Button
-            title="测试缺失信息结果"
-            onPress={() => void workflow.processScreenshot("missing")}
-          />
-          <Button
-            title="测试 AI 失败"
-            onPress={() => void workflow.processScreenshot("failure")}
-          />
-          <Button
-            title="测试无效 AI 数据"
-            onPress={() => void workflow.processScreenshot("invalid")}
-          />
+          {workflow.developmentScenarios
+            .filter((scenario) => scenario.id !== "complete")
+            .map((scenario) => (
+              <Button
+                key={scenario.id}
+                title={scenario.label}
+                onPress={() =>
+                  void workflow.processDevelopmentScenario(scenario.id)
+                }
+              />
+            ))}
         </>
       ) : null}
       {workflow.error ? (

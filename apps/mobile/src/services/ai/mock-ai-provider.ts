@@ -20,19 +20,37 @@ export function mockScenarioBytes(scenario: MockAIScenario) {
   return new Uint8Array([SCENARIO_CODES[scenario]]);
 }
 
+export interface MockAIController {
+  getScenario(): MockAIScenario;
+  setScenario(scenario: MockAIScenario): void;
+}
+
+export function createMockAIController(
+  initialScenario: MockAIScenario = "complete",
+): MockAIController {
+  let scenario = initialScenario;
+  return {
+    getScenario: () => scenario,
+    setScenario: (nextScenario) => {
+      scenario = nextScenario;
+    },
+  };
+}
+
 // Development-only test double for the secure backend provider boundary.
 export class MockAIProvider implements AIProvider {
-  async extractScreenshot({
-    imageBytes,
-  }: Parameters<AIProvider["extractScreenshot"]>[0]) {
+  constructor(private readonly controller = createMockAIController()) {}
+
+  async extractScreenshot(input: Parameters<AIProvider["extractScreenshot"]>[0]) {
+    void input;
     await new Promise((resolve) => setTimeout(resolve, 350));
 
-    switch (imageBytes[0]) {
-      case 1:
+    switch (this.controller.getScenario()) {
+      case "missing":
         return MOCK_AI_MISSING_INFO_RESULT;
-      case 2:
+      case "invalid":
         return MOCK_AI_INVALID_RESULT;
-      case 3:
+      case "failure":
         throw new Error("Mock provider failure");
       default:
         return MOCK_AI_COMPLETE_RESULT;

@@ -4,7 +4,6 @@ import {
   type AIExtractionRepository,
   type ConfirmExtractionInput,
   type ConfirmExtractionResult,
-  type ContractErrorCode,
   type IntakeService,
   type PrepareUploadInput,
   type Requirement,
@@ -17,34 +16,18 @@ import { MOCK_USER_ID } from "./mock-data";
 import { MockRepositoryStore, nextMockId } from "./mock-repositories";
 import {
   MockAIProvider,
+  createMockAIController,
   mockScenarioBytes,
-  type MockAIScenario,
+  type MockAIController,
 } from "@/services/ai/mock-ai-provider";
 import type { AppServices } from "@/services/app-services";
+import { AppServiceError } from "@/services/service-error";
 
 const MOCK_PROVIDER = "mock";
 const MOCK_MODEL = "mock-v1";
 
-export class IntakeServiceError extends Error {
-  constructor(
-    readonly code: ContractErrorCode,
-    message: string,
-    readonly retryable: boolean,
-  ) {
-    super(message);
-    this.name = "IntakeServiceError";
-  }
-}
-
 function now() {
   return new Date().toISOString();
-}
-
-function scenarioFromFileName(fileName: string): MockAIScenario {
-  if (fileName.startsWith("mock-missing--")) return "missing";
-  if (fileName.startsWith("mock-invalid--")) return "invalid";
-  if (fileName.startsWith("mock-failure--")) return "failure";
-  return "complete";
 }
 
 class MockUploadRepository implements UploadRepository {
@@ -81,7 +64,7 @@ class MockUploadRepository implements UploadRepository {
   async markUploaded(id: string) {
     const upload = this.store.uploads.find((candidate) => candidate.id === id);
     if (!upload) {
-      throw new IntakeServiceError("not_found", "Upload not found", false);
+      throw new AppServiceError("not_found", "Upload not found", false);
     }
     upload.status = "uploaded";
     upload.updatedAt = now();
@@ -90,9 +73,10 @@ class MockUploadRepository implements UploadRepository {
 }
 
 class MockAIExtractionRepository implements AIExtractionRepository {
-  private readonly provider = new MockAIProvider();
-
-  constructor(private readonly store: MockRepositoryStore) {}
+  constructor(
+    private readonly store: MockRepositoryStore,
+    private readonly provider: MockAIProvider,
+  ) {}
 
   async getById(id: string) {
     const extraction = this.store.extractions.find((candidate) => candidate.id === id);
@@ -102,10 +86,19 @@ class MockAIExtractionRepository implements AIExtractionRepository {
   async start(uploadId: string) {
     const upload = this.store.uploads.find((candidate) => candidate.id === uploadId);
     if (!upload) {
-      throw new IntakeServiceError("not_found", "Upload not found", false);
+      throw new AppServiceError("not_found", "Upload not found", false);
     }
-    if (upload.status !== "uploaded") {
-      throw new IntakeServiceError("conflict", "Upload is not ready", false);
+    const existing = [...this.store.extractions]
+      .reverse()
+      .find((candidate) => candidate.uploadId === uploadId);
+    if (existing && existing.status !== "failed") {
+      return { ...existing };
+    }
+    if (upload.status === "failed" && existing?.status === "failed") {
+      upload.status = "uploaded";
+      upload.errorCode = null;
+    } else if (upload.status !== "uploaded") {
+      throw new AppServiceError("conflict", "Upload is not ready", false);
     }
 
     const timestamp = now();
@@ -125,13 +118,10 @@ class MockAIExtractionRepository implements AIExtractionRepository {
     this.store.extractions.push(extraction);
     upload.status = "processing";
 
-    const originalFileName = this.store.uploadFileNames.get(uploadId) ?? "";
-    const scenario = scenarioFromFileName(originalFileName);
-
     try {
       const unknownResult = await this.provider.extractScreenshot({
         mimeType: upload.mimeType,
-        imageBytes: mockScenarioBytes(scenario),
+        imageBytes: mockScenarioBytes("complete"),
       });
       const parsed = AIExtractionResultSchema.safeParse(unknownResult);
       if (!parsed.success) {
@@ -171,11 +161,11 @@ class MockIntakeService implements IntakeService {
   async getValidatedResult(extractionId: string) {
     const extraction = await this.extractions.getById(extractionId);
     if (!extraction) {
-      throw new IntakeServiceError("not_found", "Extraction not found", false);
+      throw new AppServiceError("not_found", "Extraction not found", false);
     }
     if (extraction.status === "failed") {
       const code = extraction.errorCode === "validation_failed" ? "validation_failed" : "extraction_failed";
-      throw new IntakeServiceError(code, "Extraction failed", true);
+      throw new AppServiceError(code, "Extraction failed", true);
     }
     if (!extraction.result) {
       return null;
@@ -183,7 +173,11 @@ class MockIntakeService implements IntakeService {
 
     const parsed = AIExtractionResultSchema.safeParse(extraction.result);
     if (!parsed.success) {
-      throw new IntakeServiceError("validation_failed", "Invalid extraction result", true);
+      throw new AppServiceError(
+        "validation_failed",
+        "Invalid extraction result",
+        true,
+      );
     }
     return parsed.data;
   }
@@ -198,15 +192,23 @@ class MockIntakeService implements IntakeService {
       (candidate) => candidate.id === input.extractionId,
     );
     if (!extraction) {
-      throw new IntakeServiceError("not_found", "Extraction not found", false);
+      throw new AppServiceError("not_found", "Extraction not found", false);
     }
     if (extraction.status !== "needs_review") {
-      throw new IntakeServiceError("conflict", "Extraction cannot be confirmed", false);
+      throw new AppServiceError(
+        "conflict",
+        "Extraction cannot be confirmed",
+        false,
+      );
     }
 
     const parsed = AIExtractionResultSchema.safeParse(input.result);
     if (!parsed.success) {
-      throw new IntakeServiceError("validation_failed", "Review result is invalid", false);
+      throw new AppServiceError(
+        "validation_failed",
+        "Review result is invalid",
+        false,
+      );
     }
     const result = parsed.data;
     const client = await this.services.clients.create({
@@ -273,6 +275,7 @@ class MockIntakeService implements IntakeService {
 }
 
 export interface MockIntakeServices {
+  controller: MockAIController;
   extractions: AIExtractionRepository;
   intake: IntakeService;
   uploads: UploadRepository;
@@ -282,9 +285,14 @@ export function createMockIntakeServices(
   store: MockRepositoryStore,
   services: Pick<AppServices, "clients" | "projects">,
 ): MockIntakeServices {
+  const controller = createMockAIController();
   const uploads = new MockUploadRepository(store);
-  const extractions = new MockAIExtractionRepository(store);
+  const extractions = new MockAIExtractionRepository(
+    store,
+    new MockAIProvider(controller),
+  );
   return {
+    controller,
     uploads,
     extractions,
     intake: new MockIntakeService(store, services, extractions),
