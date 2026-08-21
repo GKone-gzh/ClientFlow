@@ -4,11 +4,16 @@
   "private": true,
   "packageManager": "pnpm@11.19.0",
   "scripts": {
-    "build": "pnpm -r --if-present build",
-    "lint": "eslint packages/contracts/src supabase/tests/migration.test.mjs",
-    "test": "pnpm run test:db && pnpm -r --if-present test",
+    "build": "pnpm -r --if-present build && node scripts/mobile-web-smoke.mjs --allow-missing --keep-output",
+    "lint": "pnpm run lint:root && pnpm run lint:boundaries && pnpm -r --if-present lint",
+    "lint:boundaries": "node scripts/check-app-boundaries.mjs",
+    "lint:root": "eslint packages/contracts/src supabase/tests/migration.test.mjs scripts",
+    "smoke:mobile": "node scripts/mobile-web-smoke.mjs",
+    "test": "pnpm run test:contracts-db && pnpm run test:db && pnpm -r --if-present test",
+    "test:contracts-db": "node --test scripts/contract-db-parity.test.mjs",
     "test:db": "node --test supabase/tests/migration.test.mjs",
-    "typecheck": "pnpm -r --if-present typecheck"
+    "typecheck": "pnpm -r --if-present typecheck",
+    "verify": "pnpm lint && pnpm typecheck && pnpm test"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.5",
