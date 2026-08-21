@@ -30,6 +30,13 @@
         {
           "backgroundColor": "#FFFFFF"
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "允许 ClientFlow 访问相册，以选择聊天截图。",
+          "microphonePermission": false
+        }
       ]
     ],
     "experiments": {
