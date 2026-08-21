@@ -4,7 +4,7 @@
 
 ## 当前 Phase
 
-**Phase 0：架构基线与并行开发准备**
+**Phase 0 已完成，Phase 1 可开始：Backend Core / App Core**
 
 目标是建立公共合同、安全边界、数据库设计、模块所有权和独立 worktree。此阶段不开发正式 UI，也不代替窗口2/窗口3实现大块业务。
 
@@ -17,10 +17,12 @@
 - 确定 AI 必须经 Edge Function、安全 Secret 和 Zod validation。
 - 建立架构、数据库、API 合同和 ADR 文档。
 - 建立最小 TypeScript contracts 基线。
+- 建立 `main`、`feature/backend-core`、`feature/app-core` 和对应独立 worktree。
+- 通过基线 TypeScript、ESLint 和 contracts 单元测试。
 
 ## 正在进行
 
-- 创建 `main` 初始提交及两个独立功能 worktree。
+- 等待窗口2和窗口3在各自 worktree 启动 Phase 1 实现。
 
 ## 下一步
 
