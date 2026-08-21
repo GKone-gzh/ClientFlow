@@ -82,6 +82,8 @@ apps/mobile ───────> packages/contracts <─────── sup
 
 `AIProvider` 是服务端端口，具体模型供应商是可替换适配器。Provider 返回值始终视为 `unknown`，只有通过公共 Zod Schema 后才能进入数据库和业务流程。
 
+MVP 不持久化未通过校验的完整 Provider raw output，也不在日志中记录它。`ai_extractions.result` 只能保存 `AIExtractionResultSchema` 校验成功的结构化结果。校验失败时只记录稳定 `error_code`、provider/model/schema version 和不包含用户内容的诊断元数据。
+
 模型调用应具备：
 
 - 服务端 Secret 管理。

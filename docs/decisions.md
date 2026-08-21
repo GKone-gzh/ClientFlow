@@ -63,3 +63,11 @@
 - 决策：当前 App 仅实现无品牌化 placeholder UI 和必要交互。
 - 原因：正式 UI 在独立 Figma 流程中设计，提前创造视觉系统会造成返工和风格冲突。
 - 后果：禁止自行引入渐变、玻璃拟态、发光、复杂动画、大量装饰卡片或任意品牌色；业务逻辑应与展示组件解耦，便于后续按稿替换。
+
+## ADR-009：MVP 不持久化 AI Provider Raw Output
+
+- 状态：Accepted
+- 日期：2026-08-21
+- 决策：首个 schema 不创建 `ai_extractions.raw_result`。`result` 只保存通过当前版本 Zod Schema 校验的结构化数据；无效完整输出不进入数据库或日志。
+- 原因：Provider 输出来自聊天截图，可能包含客户姓名、联系方式、预算和私密对话。当前没有字段级加密、受限调试权限、TTL 和自动清理机制，长期保存仅为调试便利不符合数据最小化原则。
+- 后果：失败诊断依赖稳定 `error_code`、provider、model、schema version、correlation ID 和不含用户内容的结构化指标。未来若确需 raw output，必须先定义加密、仅服务端访问、最短保留期限、自动清理、用户删除传播和安全测试，再通过独立 migration 引入。

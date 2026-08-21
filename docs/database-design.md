@@ -139,6 +139,10 @@
 
 复合 FK：`(upload_id, user_id) -> uploads(id, user_id)`。确认后的实体 ID 用于实现幂等响应，且必须属于同一 user。索引：`unique(id, user_id)`、`index(user_id, status, created_at desc)`。
 
+MVP 首个 schema **不创建 `raw_result` 列**。`result` 只允许保存通过当前版本 `AIExtractionResultSchema` 校验的结构化数据；未通过校验的完整 Provider 输出不得写入数据库或日志。失败记录仅保留稳定 `error_code` 和不含聊天内容的必要诊断元数据。
+
+未来若调试需求确实要求持久化 raw output，必须先通过新的架构决策，至少明确字段级加密、仅服务端访问、最短保留期限、自动清理任务、日志脱敏、用户删除传播和安全测试，并通过独立 migration 引入，不得直接修改首个 migration。
+
 ## 4. RLS 原则
 
 所有业务表必须 `enable row level security`，生产迁移建议同时 `force row level security`。基本策略为：
