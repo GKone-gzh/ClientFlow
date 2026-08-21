@@ -1,6 +1,7 @@
 import type {
   Client,
   ClientRepository,
+  ConfirmExtractionResult,
   CreateClientInput,
   CreateProjectInput,
   EntityId,
@@ -10,6 +11,8 @@ import type {
   RequirementRepository,
   Task,
   TaskRepository,
+  AIExtraction,
+  Upload,
   UpdateClientInput,
   UpdateProjectInput,
 } from "@clientflow/contracts";
@@ -25,7 +28,7 @@ import {
 const MOCK_DELAY_MS = 120;
 let idSequence = 100;
 
-function nextId() {
+export function nextMockId() {
   idSequence += 1;
   return `90000000-0000-4000-8000-${String(idSequence).padStart(12, "0")}`;
 }
@@ -43,6 +46,10 @@ export class MockRepositoryStore {
   readonly projects = MOCK_PROJECTS.map((project) => ({ ...project }));
   readonly requirements = MOCK_REQUIREMENTS.map((requirement) => ({ ...requirement }));
   readonly tasks = MOCK_TASKS.map((task) => ({ ...task }));
+  readonly uploads: Upload[] = [];
+  readonly uploadFileNames = new Map<EntityId, string>();
+  readonly extractions: AIExtraction[] = [];
+  readonly confirmations = new Map<EntityId, ConfirmExtractionResult>();
 }
 
 class MockClientRepository implements ClientRepository {
@@ -64,7 +71,7 @@ class MockClientRepository implements ClientRepository {
     const timestamp = now();
     const client: Client = {
       ...input,
-      id: nextId(),
+      id: nextMockId(),
       userId: MOCK_USER_ID,
       createdAt: timestamp,
       updatedAt: timestamp,
@@ -108,7 +115,7 @@ class MockProjectRepository implements ProjectRepository {
     const timestamp = now();
     const project: Project = {
       ...input,
-      id: nextId(),
+      id: nextMockId(),
       userId: MOCK_USER_ID,
       createdAt: timestamp,
       updatedAt: timestamp,
