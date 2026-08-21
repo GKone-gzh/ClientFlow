@@ -100,6 +100,21 @@ test("restarts upload failures and identifies invalid output as a review failure
   assert.equal(uploadRetried.status, "awaiting_review");
   assert.equal(uploadRetried.attempt, 2);
 
+  const transportComposition = composeAppServices({
+    adapter: "mock",
+    enableDevelopmentTools: false,
+  });
+  transportComposition.services.screenshotUpload.upload = async () => {
+    throw new AppServiceError("upload_failed", "Transport failed", true);
+  };
+  const transportFailed = await runIntakeWorkflow({
+    services: transportComposition.services,
+    screenshot: SCREENSHOT,
+    operationId: "workflow-transport-failure",
+  });
+  assert.equal(transportFailed.failure?.step, "upload");
+  assert.equal(transportFailed.failure?.error.code, "upload_failed");
+
   const reviewComposition = composeAppServices({
     adapter: "mock",
     enableDevelopmentTools: true,

@@ -11,6 +11,7 @@ test("exposes only stable services when development tools are disabled", async (
 
   assert.equal(composition.developmentTools, null);
   assert.equal(typeof composition.services.intake.requestExtraction, "function");
+  assert.equal(typeof composition.services.screenshotUpload.upload, "function");
   assert.equal((await composition.services.clients.list()).length, 5);
 });
 

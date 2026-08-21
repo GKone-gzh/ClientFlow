@@ -35,6 +35,11 @@ export function composeAppServices(
       const services: AppServices = {
         ...repositories,
         ...intakeServices,
+        screenshotUpload: {
+          upload: async () => {
+            await Promise.resolve();
+          },
+        },
       };
       const scenarios: DevelopmentIntakeScenario[] = MOCK_AI_SCENARIOS.map(
         (id) => ({ id, label: DEVELOPMENT_SCENARIO_LABELS[id] }),

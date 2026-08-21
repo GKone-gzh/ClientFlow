@@ -2,11 +2,25 @@ import type {
   AIExtractionRepository,
   ClientRepository,
   IntakeService,
+  PrepareUploadResult,
   ProjectRepository,
   RequirementRepository,
   TaskRepository,
   UploadRepository,
 } from "@clientflow/contracts";
+
+export interface ScreenshotUploadFile {
+  uri: string;
+  mimeType: string;
+  byteSize: number;
+}
+
+export interface ScreenshotUploadTransport {
+  upload(input: {
+    prepared: PrepareUploadResult;
+    file: ScreenshotUploadFile;
+  }): Promise<void>;
+}
 
 export interface AppServices {
   extractions: AIExtractionRepository;
@@ -14,6 +28,7 @@ export interface AppServices {
   clients: ClientRepository;
   projects: ProjectRepository;
   requirements: RequirementRepository;
+  screenshotUpload: ScreenshotUploadTransport;
   tasks: TaskRepository;
   uploads: UploadRepository;
 }

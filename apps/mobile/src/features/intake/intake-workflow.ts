@@ -40,7 +40,7 @@ export interface IntakeWorkflowState {
 }
 
 interface RunIntakeWorkflowInput {
-  services: Pick<AppServices, "uploads" | "intake">;
+  services: Pick<AppServices, "uploads" | "screenshotUpload" | "intake">;
   screenshot: PreparedScreenshot;
   operationId: string;
   previous?: IntakeWorkflowState | null;
@@ -166,6 +166,14 @@ async function executeIntakeWorkflow({
         mimeType: screenshot.mimeType,
         byteSize: screenshot.byteSize,
         originalFileName: screenshot.fileName,
+      });
+      await services.screenshotUpload.upload({
+        prepared,
+        file: {
+          uri: screenshot.uri,
+          mimeType: screenshot.mimeType,
+          byteSize: screenshot.byteSize,
+        },
       });
       await services.uploads.markUploaded(prepared.uploadId);
       state = { ...state, uploadId: prepared.uploadId, status: "extracting" };
