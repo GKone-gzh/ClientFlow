@@ -24,7 +24,30 @@
 | `UploadStatus` | `pending`, `uploaded`, `processing`, `completed`, `failed` |
 | `AIExtractionStatus` | `queued`, `processing`, `needs_review`, `confirmed`, `failed` |
 
-## 4. Repository 接口
+## 4. Auth 接口
+
+App 通过 `AuthService` 使用认证能力，页面和路由不得直接依赖 Supabase SDK。该端口定义在 App 的中立 service 层，因为服务端继续以 bearer token 和 `auth.uid()` 作为认证边界，不共享客户端 Session 对象。
+
+```ts
+interface AuthService {
+  getSession(): Promise<AuthSession | null>;
+  onSessionChange(listener: (session: AuthSession | null) => void): () => void;
+  signInWithPassword(credentials: AuthCredentials): Promise<AuthSession>;
+  signUpWithPassword(credentials: AuthCredentials): Promise<AuthSignUpResult>;
+  signOut(): Promise<void>;
+  startAutoRefresh(): void;
+  stopAutoRefresh(): void;
+}
+```
+
+- `AuthSession` 只向 UI 暴露路由需要的用户标识和邮箱，不暴露 refresh token。
+- Supabase Adapter 必须持久化 Session，并在原生 App 前后台切换时启停 token refresh。
+- Mock Adapter 必须实现相同端口，用于无后端测试和开发。
+- 客户端配置只允许 Supabase URL 与 anon/publishable key；service-role、`sb_secret_` 和 AI Secret 禁止进入 `EXPO_PUBLIC_*`。
+- 注册启用邮件确认时可以返回用户但不返回 Session；UI 必须留在认证区并提示检查邮箱。
+- Session 恢复完成前不作登录区或 App 区重定向，避免短暂暴露错误页面。
+
+## 5. Repository 接口
 
 公共接口定义在 `interfaces.ts`。职责如下：
 
@@ -42,7 +65,7 @@ Repository 必须满足：
 - App Mock 和 Supabase 实现遵守相同接口和状态语义。
 - 列表 MVP 可先返回有上限的数组；引入分页前必须统一增加公共分页合同。
 
-## 5. Service 接口
+## 6. Service 接口
 
 `IntakeService` 负责核心截图接单用例：
 
@@ -60,7 +83,7 @@ interface IntakeService {
 
 截图接单的上传、处理中、失败和成功阶段属于 App 本地 workflow 状态，不是持久化领域状态，不加入公共 contracts。测试场景和 Mock Provider 类型同样只允许存在于 App 测试替身边界。
 
-## 6. AI Provider 接口
+## 7. AI Provider 接口
 
 ```ts
 interface AIProvider {
@@ -75,13 +98,13 @@ Provider 只能在 Edge Function/安全后端实现和调用。返回 `unknown` 
 
 当前 extraction schema version 为 `1`，包含：client candidate、project candidate、至少一个 requirement、suggested tasks、confidence 和 warnings。修改必填字段或语义时必须提升版本并保留兼容读取策略。
 
-## 7. 上传合同
+## 8. 上传合同
 
 `PrepareUploadInput` 只接受 `mimeType`、`byteSize`、`originalFileName`。服务端验证后返回 `uploadId`、规范化 `storagePath` 和短时 `signedUploadToken`。原始文件名仅用于日志友好的元信息且需要清洗，不参与路径授权。
 
 上传成功后客户端调用 `markUploaded(uploadId)`。服务端必须实际确认对象存在、路径归属、大小和 MIME 合法，不能仅相信客户端回调。
 
-## 8. 错误合同
+## 9. 错误合同
 
 跨边界错误统一映射为：
 
@@ -96,7 +119,7 @@ interface ContractErrorShape {
 
 稳定 code：`unauthenticated`、`forbidden`、`not_found`、`validation_failed`、`conflict`、`upload_failed`、`extraction_failed`、`rate_limited`、`internal_error`。UI 根据 code/retryable 决定行为，不解析 message 文本。服务端日志可保存内部 correlation ID，但不能将 Secret、SQL 或 Provider 原始错误直接返回客户端。
 
-## 9. 建议路由命名
+## 10. 建议路由命名
 
 Expo Router 页面命名由窗口3按以下稳定业务语义落地，视觉层不影响路由合同：
 

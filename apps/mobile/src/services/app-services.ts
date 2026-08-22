@@ -22,7 +22,38 @@ export interface ScreenshotUploadTransport {
   }): Promise<void>;
 }
 
+export interface AuthUser {
+  id: string;
+  email: string | null;
+}
+
+export interface AuthSession {
+  user: AuthUser;
+}
+
+export interface AuthCredentials {
+  email: string;
+  password: string;
+}
+
+export interface AuthSignUpResult {
+  requiresEmailConfirmation: boolean;
+  session: AuthSession | null;
+  user: AuthUser;
+}
+
+export interface AuthService {
+  getSession(): Promise<AuthSession | null>;
+  onSessionChange(listener: (session: AuthSession | null) => void): () => void;
+  signInWithPassword(credentials: AuthCredentials): Promise<AuthSession>;
+  signOut(): Promise<void>;
+  signUpWithPassword(credentials: AuthCredentials): Promise<AuthSignUpResult>;
+  startAutoRefresh(): void;
+  stopAutoRefresh(): void;
+}
+
 export interface AppServices {
+  auth: AuthService;
   extractions: AIExtractionRepository;
   intake: IntakeService;
   clients: ClientRepository;
