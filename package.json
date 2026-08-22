@@ -7,7 +7,7 @@
     "build": "pnpm -r --if-present build && node scripts/mobile-web-smoke.mjs --allow-missing --keep-output",
     "lint": "pnpm run lint:root && pnpm run lint:boundaries && pnpm -r --if-present lint",
     "lint:boundaries": "node scripts/check-app-boundaries.mjs",
-    "lint:root": "eslint packages/contracts/src supabase/tests/migration.test.mjs scripts",
+    "lint:root": "eslint packages/contracts/src supabase/functions/_shared supabase/tests/migration.test.mjs scripts",
     "smoke:mobile": "node scripts/mobile-web-smoke.mjs",
     "test": "pnpm run test:contracts-db && pnpm run test:db && pnpm -r --if-present test",
     "test:contracts-db": "node --test scripts/contract-db-parity.test.mjs",

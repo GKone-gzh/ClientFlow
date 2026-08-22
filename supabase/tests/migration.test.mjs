@@ -16,12 +16,21 @@ const projectB = "00000000-0000-4000-8000-00000000b201";
 
 const bootstrapSql = `
   create schema auth;
+  create schema storage;
   create role anon nologin;
   create role authenticated nologin;
 
   create table auth.users (
     id uuid primary key,
     raw_user_meta_data jsonb
+  );
+
+  create table storage.buckets (
+    id text primary key,
+    name text not null,
+    public boolean not null default false,
+    file_size_limit bigint,
+    allowed_mime_types text[]
   );
 
   create function auth.uid()
@@ -540,6 +549,244 @@ test("constraints and least privilege protect ingestion metadata", async () => {
       `),
       /permission denied/i,
     );
+  } finally {
+    await db.close();
+  }
+});
+
+test("confirmation RPC is owner-bound, atomic, and idempotent", async () => {
+  const db = await createDatabase();
+  const uploadId = "00000000-0000-4000-8000-00000000a711";
+  const extractionId = "00000000-0000-4000-8000-00000000a811";
+  const invalidUploadId = "00000000-0000-4000-8000-00000000a712";
+  const invalidExtractionId = "00000000-0000-4000-8000-00000000a812";
+  const validResult = {
+    schemaVersion: 1,
+    client: {
+      name: "Acme",
+      contactHandle: "@acme",
+      contactChannel: "wechat",
+    },
+    project: {
+      name: "Launch site",
+      summary: "A focused launch",
+      budgetAmount: 12000,
+      budgetCurrency: "CNY",
+      dueDate: "2026-09-30",
+    },
+    requirements: [
+      { content: "Responsive page", sortOrder: 0 },
+      { content: "Contact form", sortOrder: 1 },
+    ],
+    suggestedTasks: [
+      {
+        title: "Build layout",
+        description: null,
+        requirementIndex: 0,
+        sortOrder: 0,
+      },
+      {
+        title: "Wire form",
+        description: "Connect the endpoint",
+        requirementIndex: 1,
+        sortOrder: 1,
+      },
+    ],
+    confidence: 0.91,
+    warnings: [],
+  };
+
+  const callConfirmation = (id, result) =>
+    db.query(
+      `select * from public.confirm_extraction($1::uuid, $2::jsonb)`,
+      [id, JSON.stringify(result)],
+    );
+
+  try {
+    await db.exec(`
+      insert into auth.users (id) values ('${userA}'), ('${userB}');
+      insert into public.uploads (
+        id,
+        user_id,
+        storage_path,
+        mime_type,
+        byte_size,
+        status
+      )
+      values
+        (
+          '${uploadId}',
+          '${userA}',
+          '${userA}/${uploadId}/source',
+          'image/png',
+          1024,
+          'completed'
+        ),
+        (
+          '${invalidUploadId}',
+          '${userA}',
+          '${userA}/${invalidUploadId}/source',
+          'image/png',
+          1024,
+          'completed'
+        );
+      insert into public.ai_extractions (
+        id,
+        user_id,
+        upload_id,
+        status,
+        result
+      )
+      values
+        (
+          '${extractionId}',
+          '${userA}',
+          '${uploadId}',
+          'needs_review',
+          '${JSON.stringify(validResult)}'::jsonb
+        ),
+        (
+          '${invalidExtractionId}',
+          '${userA}',
+          '${invalidUploadId}',
+          'needs_review',
+          '${JSON.stringify(validResult)}'::jsonb
+        );
+      set role authenticated;
+      select set_config('request.jwt.claim.sub', '${userB}', false);
+    `);
+
+    await assert.rejects(
+      callConfirmation(extractionId, validResult),
+      /extraction not found/i,
+    );
+
+    await db.exec(
+      `select set_config('request.jwt.claim.sub', '${userA}', false)`,
+    );
+
+    const beforeInvalid = await db.query(
+      "select count(*)::integer as count from public.clients",
+    );
+    await assert.rejects(
+      callConfirmation(invalidExtractionId, {
+        ...validResult,
+        suggestedTasks: [
+          { ...validResult.suggestedTasks[0], requirementIndex: 99 },
+        ],
+      }),
+      /invalid extraction result/i,
+    );
+    const afterInvalid = await db.query(
+      "select count(*)::integer as count from public.clients",
+    );
+    assert.deepEqual(afterInvalid.rows, beforeInvalid.rows);
+
+    const first = await callConfirmation(extractionId, validResult);
+    assert.equal(first.rows.length, 1);
+    assert.equal(first.rows[0].requirement_ids.length, 2);
+    assert.equal(first.rows[0].task_ids.length, 2);
+
+    const second = await callConfirmation(extractionId, {
+      ...validResult,
+      client: { ...validResult.client, name: "Ignored retry mutation" },
+    });
+    assert.deepEqual(second.rows, first.rows);
+
+    const createdCounts = await db.query(`
+      select
+        (select count(*)::integer from public.clients) as clients,
+        (select count(*)::integer from public.projects) as projects,
+        (select count(*)::integer from public.requirements) as requirements,
+        (select count(*)::integer from public.tasks) as tasks
+    `);
+    assert.deepEqual(createdCounts.rows, [
+      { clients: 1, projects: 1, requirements: 2, tasks: 2 },
+    ]);
+
+    const confirmation = await db.query(`
+      select status, result -> 'client' ->> 'name' as client_name
+      from public.ai_extractions
+      where id = '${extractionId}'
+    `);
+    assert.deepEqual(confirmation.rows, [
+      { status: "confirmed", client_name: "Acme" },
+    ]);
+
+    await db.exec(`
+      reset role;
+      create function public.force_task_failure_for_test()
+      returns trigger
+      language plpgsql
+      as $$
+      begin
+        raise exception 'forced task failure';
+      end;
+      $$;
+      create trigger force_task_failure_for_test
+      before insert on public.tasks
+      for each row execute function public.force_task_failure_for_test();
+      set role authenticated;
+      select set_config('request.jwt.claim.sub', '${userA}', false);
+    `);
+
+    await assert.rejects(
+      callConfirmation(invalidExtractionId, validResult),
+      /forced task failure/i,
+    );
+    const afterForcedFailure = await db.query(`
+      select
+        (select count(*)::integer from public.clients) as clients,
+        (select count(*)::integer from public.projects) as projects,
+        (select count(*)::integer from public.requirements) as requirements,
+        (select count(*)::integer from public.tasks) as tasks,
+        (
+          select status
+          from public.ai_extractions
+          where id = '${invalidExtractionId}'
+        ) as failed_confirmation_status
+    `);
+    assert.deepEqual(afterForcedFailure.rows, [
+      {
+        clients: 1,
+        projects: 1,
+        requirements: 2,
+        tasks: 2,
+        failed_confirmation_status: "needs_review",
+      },
+    ]);
+
+    await db.exec(`
+      reset role;
+      set role anon;
+      select set_config('request.jwt.claim.sub', '', false);
+    `);
+    await assert.rejects(
+      callConfirmation(extractionId, validResult),
+      /permission denied/i,
+    );
+  } finally {
+    await db.close();
+  }
+});
+
+test("private screenshot bucket is constrained and not public", async () => {
+  const db = await createDatabase();
+
+  try {
+    const bucket = await db.query(`
+      select id, public, file_size_limit, allowed_mime_types
+      from storage.buckets
+      where id = 'intake-screenshots'
+    `);
+    assert.deepEqual(bucket.rows, [
+      {
+        id: "intake-screenshots",
+        public: false,
+        file_size_limit: 10485760,
+        allowed_mime_types: ["image/jpeg", "image/png", "image/webp"],
+      },
+    ]);
   } finally {
     await db.close();
   }
