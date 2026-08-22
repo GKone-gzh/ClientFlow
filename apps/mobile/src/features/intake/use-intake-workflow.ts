@@ -6,6 +6,7 @@ import {
   type IntakeWorkflowFailure,
 } from "@/features/intake/intake-workflow";
 import {
+  useAppCapabilities,
   useAppServices,
   useDevelopmentTools,
 } from "@/services/app-service-provider";
@@ -35,6 +36,7 @@ function displayFailure(failure: IntakeWorkflowFailure | null) {
 export function useIntakeWorkflow() {
   const state = useIntakeFlowStore();
   const services = useAppServices();
+  const capabilities = useAppCapabilities();
   const developmentTools = useDevelopmentTools();
 
   const selectScreenshot = async () => {
@@ -83,6 +85,7 @@ export function useIntakeWorkflow() {
       screenshot: current.screenshot,
       operationId,
       previous: retry ? current.workflow : null,
+      stopAfterUpload: !capabilities.extraction,
       onStateChange: current.setWorkflow,
     });
     if (result.status === "awaiting_review" && result.extractionId) {
@@ -99,6 +102,7 @@ export function useIntakeWorkflow() {
   return {
     ...state,
     developmentScenarios: developmentTools?.intakeScenarios ?? [],
+    uploadOnly: !capabilities.extraction,
     error: displayFailure(state.error),
     cancel: () => {
       state.reset();

@@ -79,7 +79,7 @@ interface IntakeService {
 
 `confirm` 必须在服务端再次校验 payload，并通过原子事务创建 Client、Project、Requirements、Tasks。返回的四组 ID 是导航和刷新提示，不替代后续权威查询。
 
-`PrepareUploadInputSchema`、`RequestExtractionInputSchema`、`GetExtractionInputSchema` 和 `ConfirmExtractionInputSchema` 是对应服务端入口的运行时校验器。它们是现有接口的加法式导出，不改变 `IntakeService` 的三个方法签名；App 可继续通过 Repository/Service 接口调用，后端必须在信任边界使用 schema 解析未经信任的 payload。
+`PrepareUploadInputSchema`、`MarkUploadedInputSchema`、`RequestExtractionInputSchema`、`GetExtractionInputSchema` 和 `ConfirmExtractionInputSchema` 是对应服务端入口的运行时校验器。`PrepareUploadResultSchema` 和 `UploadSchema` 用于 App 校验跨 Edge Function 边界的响应。它们不改变 Repository/Service 的现有方法签名；App 继续通过 Repository/Service 接口调用，服务端与 App 都必须在各自信任边界解析未经信任的 payload。
 
 截图接单的上传、处理中、失败和成功阶段属于 App 本地 workflow 状态，不是持久化领域状态，不加入公共 contracts。测试场景和 Mock Provider 类型同样只允许存在于 App 测试替身边界。
 
@@ -102,7 +102,7 @@ Provider 只能在 Edge Function/安全后端实现和调用。返回 `unknown` 
 
 `PrepareUploadInput` 只接受 `mimeType`、`byteSize`、`originalFileName`。服务端验证后返回 `uploadId`、规范化 `storagePath` 和短时 `signedUploadToken`。原始文件名仅用于日志友好的元信息且需要清洗，不参与路径授权。
 
-上传成功后客户端调用 `markUploaded(uploadId)`。服务端必须实际确认对象存在、路径归属、大小和 MIME 合法，不能仅相信客户端回调。
+上传成功后客户端以 `{ uploadId }` 调用 `mark-uploaded`；`UploadRepository.markUploaded(uploadId)` 封装该调用。服务端必须实际确认对象存在、路径归属、大小和 MIME 合法，不能仅相信客户端回调。成功响应为公共 `Upload` 模型且 `status` 必须为 `uploaded`。客户端不能提交 owner、userId 或 storagePath。
 
 ## 9. 错误合同
 
@@ -129,9 +129,10 @@ Expo Router 页面命名由窗口3按以下稳定业务语义落地，视觉层�
 - `/(app)/intake/upload`
 - `/(app)/intake/[extractionId]/review`
 
-Edge Function 名称由窗口2使用：
+Edge Function 名称：
 
 - `prepare-upload`
+- `mark-uploaded`
 - `request-extraction`
 - `get-extraction`
 - `confirm-extraction`

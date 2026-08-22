@@ -12,6 +12,7 @@ import {
 } from "@/services/ai/mock-ai-provider";
 import { SupabaseAuthService } from "@/services/supabase/supabase-auth-service";
 import { createSupabaseClient } from "@/services/supabase/supabase-client";
+import { createSupabaseUploadAdapter } from "@/services/supabase/supabase-upload-adapter";
 
 export type AppServiceConfiguration =
   | {
@@ -40,19 +41,28 @@ export function composeAppServices(
     repositories.store,
     repositories,
   );
-  const auth =
-    configuration.adapter === "mock"
-      ? new MockAuthService()
-      : new SupabaseAuthService(createSupabaseClient(configuration));
+  const supabaseClient =
+    configuration.adapter === "supabase"
+      ? createSupabaseClient(configuration)
+      : null;
+  const auth = supabaseClient
+    ? new SupabaseAuthService(supabaseClient)
+    : new MockAuthService();
+  const uploadServices = supabaseClient
+    ? createSupabaseUploadAdapter(supabaseClient)
+    : {
+        uploads: intakeServices.uploads,
+        screenshotUpload: {
+          upload: async () => {
+            await Promise.resolve();
+          },
+        },
+      };
   const services: AppServices = {
     ...repositories,
     ...intakeServices,
+    ...uploadServices,
     auth,
-    screenshotUpload: {
-      upload: async () => {
-        await Promise.resolve();
-      },
-    },
   };
   const scenarios: DevelopmentIntakeScenario[] = MOCK_AI_SCENARIOS.map(
     (id) => ({ id, label: DEVELOPMENT_SCENARIO_LABELS[id] }),
@@ -70,5 +80,9 @@ export function composeAppServices(
         }
       : null;
 
-  return { services, developmentTools };
+  return {
+    capabilities: { extraction: configuration.adapter === "mock" },
+    services,
+    developmentTools,
+  };
 }

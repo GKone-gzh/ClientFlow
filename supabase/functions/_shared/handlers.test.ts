@@ -7,6 +7,7 @@ import { BackendError } from "./errors";
 import {
   createConfirmExtractionHandler,
   createGetExtractionHandler,
+  createMarkUploadedHandler,
   createPrepareUploadHandler,
   createRequestExtractionHandler,
 } from "./handlers";
@@ -71,6 +72,19 @@ test("prepare-upload returns the contracted private upload fields", async () => 
     uploadId,
   });
   assert.equal(response.headers.get("cache-control"), "no-store");
+});
+
+test("mark-uploaded accepts only an upload id and returns the verified upload", async () => {
+  const handler = createMarkUploadedHandler(async () => createFacade());
+  const response = await handler(jsonRequest({ uploadId }));
+
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).status, "uploaded");
+
+  const injected = await handler(
+    jsonRequest({ uploadId, userId: "00000000-0000-4000-8000-000000000999" }),
+  );
+  assert.equal(injected.status, 400);
 });
 
 test("get-extraction rejects malformed UUIDs at the HTTP boundary", async () => {
@@ -166,12 +180,27 @@ function createFacade(): BackendFacade {
       taskIds: [],
     }),
     getExtraction: async () => createExtraction(),
+    markUploaded: async () => createUpload(),
     prepareUpload: async () => ({
       uploadId,
       storagePath: `user/${uploadId}/source`,
       signedUploadToken: "signed-token",
     }),
     requestExtraction: async () => createExtraction(),
+  };
+}
+
+function createUpload() {
+  return {
+    id: uploadId,
+    userId: "00000000-0000-4000-8000-000000000001",
+    storagePath: `00000000-0000-4000-8000-000000000001/${uploadId}/source`,
+    mimeType: "image/png",
+    byteSize: 1024,
+    status: "uploaded" as const,
+    errorCode: null,
+    createdAt: "2026-08-23T00:00:00.000Z",
+    updatedAt: "2026-08-23T00:00:00.000Z",
   };
 }
 

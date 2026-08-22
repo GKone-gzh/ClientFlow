@@ -9,6 +9,7 @@
     "lint:boundaries": "node scripts/check-app-boundaries.mjs",
     "lint:root": "eslint packages/contracts/src supabase/functions/_shared supabase/tests/migration.test.mjs scripts",
     "smoke:auth": "pnpm --filter @clientflow/mobile smoke:auth",
+    "smoke:storage": "pnpm --filter @clientflow/mobile smoke:storage",
     "smoke:http": "pnpm --filter @clientflow/backend-core test:http",
     "smoke:mobile": "node scripts/mobile-web-smoke.mjs",
     "test": "pnpm run test:contracts-db && pnpm run test:db && pnpm -r --if-present test",

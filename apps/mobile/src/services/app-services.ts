@@ -75,6 +75,9 @@ export interface DevelopmentTools {
 }
 
 export interface AppServiceComposition {
+  capabilities: {
+    extraction: boolean;
+  };
   services: AppServices;
   developmentTools: DevelopmentTools | null;
 }

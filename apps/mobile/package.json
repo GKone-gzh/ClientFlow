@@ -40,6 +40,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "smoke:auth": "tsx scripts/supabase-auth-smoke.ts",
+    "smoke:storage": "tsx scripts/supabase-storage-smoke.ts",
     "test": "tsx --test src/**/*.test.ts scripts/**/*.test.ts",
     "typecheck": "tsc --noEmit"
   },

@@ -8,6 +8,7 @@ const STAGE_LABELS = {
   selecting: "正在选择图片...",
   compressing: "正在验证并压缩图片...",
   uploading: "正在上传截图...",
+  uploaded: "截图已安全上传。",
   extracting: "AI 正在识别...",
   awaiting_review: "识别完成，正在进入确认页面...",
   confirming: "正在确认...",
@@ -47,10 +48,12 @@ export default function IntakeUploadScreen() {
       {STAGE_LABELS[workflow.stage] ? (
         <Text accessibilityRole="progressbar">{STAGE_LABELS[workflow.stage]}</Text>
       ) : null}
-      {workflow.screenshot && !isBusy && workflow.stage !== "success" ? (
+      {workflow.screenshot &&
+      !isBusy &&
+      !["success", "uploaded"].includes(workflow.stage) ? (
         <>
           <Button
-            title="开始识别"
+            title={workflow.uploadOnly ? "上传截图" : "开始识别"}
             onPress={() => void workflow.processScreenshot()}
           />
           {workflow.developmentScenarios

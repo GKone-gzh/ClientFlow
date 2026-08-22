@@ -29,17 +29,23 @@
 - 客户端只读取 `EXPO_PUBLIC_SUPABASE_URL` 和 `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`。
 - `EXPO_PUBLIC_*` 会进入客户端 bundle，禁止配置 service-role、`sb_secret_` 或 AI Secret。
 
+## 正在进行
+
+- Phase 2 P2 / Issue #4：实现可切换的真实 Supabase private Storage 截图上传 Adapter。
+- 本阶段仅推进到 `uploads.status = uploaded`，不调用 AI extraction。
+- 上传链路固定为 `prepare-upload -> signed private upload -> mark-uploaded`。
+
 ## 下一步
 
-1. Phase 2 P1 已完成；在本阶段 commit、push 和 Issue 关闭后停止。
-2. 下一轮经确认后实现真实 private Storage 上传 Adapter，并通过现有 `prepare-upload` 安全边界上传截图。
-3. 将 AI Extraction、确认事务和 Client/Project/Requirement/Task Repository 切换到真实 Supabase Adapter。
-4. 端到端验证用户 A/B 数据隔离、重复确认幂等、上传失败恢复和客户详情刷新。
+1. 完成 Phase 2 P2 自动化测试和真实 Supabase Storage 验收。
+2. 下一轮经确认后将 Intake / AI Stub Extraction / 确认流程切换到真实 Supabase Adapter。
+3. 后续再切换 Client/Project/Requirement/Task Repository，并完成端到端用户 A/B 隔离验证。
 
 ## 环境限制
 
 - 真实 Supabase 公共配置和测试账号只存在于 Git 忽略的本地环境文件，不进入仓库或客户端 Secret。
 - 本机未安装 Supabase CLI、Docker、Android `adb` 或 emulator；PGlite migration/RLS 测试可运行，本阶段已通过局域网 Expo Go 完成 Android 实机验收。
+- Phase 2 P2 远端预检确认 `uploads` schema 可访问，但 `prepare-upload` 与 `mark-uploaded` 当前均返回 HTTP 404。代码与 smoke 已就绪；真实验收需先使用 Supabase Personal Access Token 部署这两个 Edge Functions，token 不得写入仓库。
 - iOS App Store 版 Expo Go 在 SDK 57 过渡期不兼容本项目；后续 iOS 原生验收应使用兼容的 Development Build/TestFlight，不降级项目 SDK。
 - 正式 Figma 尚未交付，App 保持基础 Placeholder UI。
 

@@ -1,6 +1,7 @@
 import type {
   ConfirmExtractionInput,
   GetExtractionInput,
+  MarkUploadedInput,
   PrepareUploadInput,
   RequestExtractionInput,
 } from "@clientflow/contracts";
@@ -72,6 +73,8 @@ function createFacade(
     confirmExtraction: (input: ConfirmExtractionInput) => intake.confirm(input),
     getExtraction: (input: GetExtractionInput) =>
       intake.getExtraction(input.extractionId),
+    markUploaded: (input: MarkUploadedInput) =>
+      uploads.markUploaded(input.uploadId),
     prepareUpload: (input: PrepareUploadInput) => uploads.prepare(input),
     requestExtraction: (input: RequestExtractionInput) =>
       intake.requestExtraction(input.uploadId),

@@ -1,8 +1,13 @@
 import { z } from "zod";
 
 import { AIExtractionResultSchema } from "./ai-extraction";
-import type { EntityId, ISODate, ISODateTime } from "./models";
-import type { ClientStatus, ProjectStatus, TaskStatus } from "./statuses";
+import type { EntityId, ISODate, ISODateTime, Upload } from "./models";
+import {
+  UploadStatusSchema,
+  type ClientStatus,
+  type ProjectStatus,
+  type TaskStatus,
+} from "./statuses";
 
 export const EntityIdSchema = z.string().uuid();
 
@@ -73,6 +78,34 @@ export interface PrepareUploadResult {
   storagePath: string;
   signedUploadToken: string;
 }
+
+export const PrepareUploadResultSchema = z
+  .object({
+    uploadId: EntityIdSchema,
+    storagePath: z.string().min(1),
+    signedUploadToken: z.string().min(1),
+  })
+  .strict();
+
+export const MarkUploadedInputSchema = z
+  .object({ uploadId: EntityIdSchema })
+  .strict();
+
+export type MarkUploadedInput = z.infer<typeof MarkUploadedInputSchema>;
+
+export const UploadSchema: z.ZodType<Upload> = z
+  .object({
+    id: EntityIdSchema,
+    userId: EntityIdSchema,
+    storagePath: z.string().min(1),
+    mimeType: z.enum(["image/jpeg", "image/png", "image/webp"]),
+    byteSize: z.number().int().positive().max(10 * 1024 * 1024),
+    status: UploadStatusSchema,
+    errorCode: z.string().nullable(),
+    createdAt: z.string().min(1),
+    updatedAt: z.string().min(1),
+  })
+  .strict();
 
 export const RequestExtractionInputSchema = z
   .object({ uploadId: EntityIdSchema })

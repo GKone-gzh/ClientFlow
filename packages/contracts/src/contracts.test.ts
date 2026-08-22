@@ -5,8 +5,11 @@ import { AIExtractionResultSchema } from "./ai-extraction";
 import {
   ConfirmExtractionInputSchema,
   GetExtractionInputSchema,
+  MarkUploadedInputSchema,
   PrepareUploadInputSchema,
+  PrepareUploadResultSchema,
   RequestExtractionInputSchema,
+  UploadSchema,
 } from "./inputs";
 import {
   AI_EXTRACTION_STATUSES,
@@ -89,6 +92,19 @@ test("validates strict upload and extraction boundary inputs", () => {
     false,
   );
   assert.equal(
+    MarkUploadedInputSchema.safeParse({
+      uploadId: "00000000-0000-4000-8000-000000000001",
+    }).success,
+    true,
+  );
+  assert.equal(
+    MarkUploadedInputSchema.safeParse({
+      uploadId: "00000000-0000-4000-8000-000000000001",
+      userId: "00000000-0000-4000-8000-000000000002",
+    }).success,
+    false,
+  );
+  assert.equal(
     RequestExtractionInputSchema.safeParse({
       uploadId: "00000000-0000-4000-8000-000000000001",
     }).success,
@@ -107,6 +123,33 @@ test("validates strict upload and extraction boundary inputs", () => {
       untrusted: true,
     }).success,
     false,
+  );
+});
+
+test("validates upload boundary responses", () => {
+  assert.equal(
+    PrepareUploadResultSchema.safeParse({
+      uploadId: "00000000-0000-4000-8000-000000000001",
+      storagePath:
+        "00000000-0000-4000-8000-000000000002/00000000-0000-4000-8000-000000000001/source",
+      signedUploadToken: "signed-token",
+    }).success,
+    true,
+  );
+  assert.equal(
+    UploadSchema.safeParse({
+      id: "00000000-0000-4000-8000-000000000001",
+      userId: "00000000-0000-4000-8000-000000000002",
+      storagePath:
+        "00000000-0000-4000-8000-000000000002/00000000-0000-4000-8000-000000000001/source",
+      mimeType: "image/png",
+      byteSize: 1024,
+      status: "uploaded",
+      errorCode: null,
+      createdAt: "2026-08-23T00:00:00.000Z",
+      updatedAt: "2026-08-23T00:00:00.000Z",
+    }).success,
+    true,
   );
 });
 

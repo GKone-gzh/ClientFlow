@@ -10,6 +10,7 @@ test("exposes only stable services when development tools are disabled", async (
   });
 
   assert.equal(composition.developmentTools, null);
+  assert.equal(composition.capabilities.extraction, true);
   assert.equal(typeof composition.services.auth.signInWithPassword, "function");
   assert.equal(typeof composition.services.intake.requestExtraction, "function");
   assert.equal(typeof composition.services.screenshotUpload.upload, "function");
@@ -25,6 +26,7 @@ test("uses real Supabase auth without exposing mock development controls", () =>
   });
 
   assert.equal(composition.developmentTools, null);
+  assert.equal(composition.capabilities.extraction, false);
   assert.equal(typeof composition.services.auth.getSession, "function");
 });
 

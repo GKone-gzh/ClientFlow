@@ -1,15 +1,18 @@
 import {
   ConfirmExtractionInputSchema,
   GetExtractionInputSchema,
+  MarkUploadedInputSchema,
   PrepareUploadInputSchema,
   RequestExtractionInputSchema,
   type AIExtraction,
   type ConfirmExtractionInput,
   type ConfirmExtractionResult,
   type GetExtractionInput,
+  type MarkUploadedInput,
   type PrepareUploadInput,
   type PrepareUploadResult,
   type RequestExtractionInput,
+  type Upload,
 } from "@clientflow/contracts";
 import { z } from "zod";
 
@@ -28,6 +31,7 @@ export interface BackendFacade {
     input: ConfirmExtractionInput,
   ): Promise<ConfirmExtractionResult>;
   getExtraction(input: GetExtractionInput): Promise<AIExtraction>;
+  markUploaded(input: MarkUploadedInput): Promise<Upload>;
   prepareUpload(input: PrepareUploadInput): Promise<PrepareUploadResult>;
   requestExtraction(input: RequestExtractionInput): Promise<AIExtraction>;
 }
@@ -41,6 +45,16 @@ export function createPrepareUploadHandler(
     PrepareUploadInputSchema,
     createBackend,
     (backend, input) => backend.prepareUpload(input),
+  );
+}
+
+export function createMarkUploadedHandler(
+  createBackend: BackendFactory,
+): (request: Request) => Promise<Response> {
+  return createJsonHandler(
+    MarkUploadedInputSchema,
+    createBackend,
+    (backend, input) => backend.markUploaded(input),
   );
 }
 

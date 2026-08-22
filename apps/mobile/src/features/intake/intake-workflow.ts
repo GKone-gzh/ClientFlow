@@ -16,6 +16,7 @@ export type IntakeWorkflowStep =
 
 export type IntakeWorkflowStatus =
   | "uploading"
+  | "uploaded"
   | "extracting"
   | "awaiting_review"
   | "confirming"
@@ -43,6 +44,7 @@ interface RunIntakeWorkflowInput {
   services: Pick<AppServices, "uploads" | "screenshotUpload" | "intake">;
   screenshot: PreparedScreenshot;
   operationId: string;
+  stopAfterUpload?: boolean;
   previous?: IntakeWorkflowState | null;
   onStateChange?: (state: IntakeWorkflowState) => void;
 }
@@ -140,6 +142,7 @@ async function executeIntakeWorkflow({
   services,
   screenshot,
   operationId,
+  stopAfterUpload = false,
   previous,
   onStateChange,
 }: RunIntakeWorkflowInput): Promise<IntakeWorkflowState> {
@@ -176,8 +179,13 @@ async function executeIntakeWorkflow({
         },
       });
       await services.uploads.markUploaded(prepared.uploadId);
-      state = { ...state, uploadId: prepared.uploadId, status: "extracting" };
+      state = {
+        ...state,
+        uploadId: prepared.uploadId,
+        status: stopAfterUpload ? "uploaded" : "extracting",
+      };
       emit(state, onStateChange);
+      if (stopAfterUpload) return state;
     }
   } catch (error) {
     return emit(failedState(state, "upload", error), onStateChange);

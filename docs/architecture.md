@@ -68,13 +68,14 @@ apps/mobile ───────> packages/contracts <─────── sup
 
 1. App 使用 Supabase Auth 建立用户 session。
 2. App 请求创建 `uploads` 记录和受限上传目标；服务端从 session 取 `auth.uid()`，不接受客户端传入 owner。
-3. App 将截图上传到 private bucket 的 `{user_id}/{upload_id}/source` 路径。
-4. App 请求开始提取。Edge Function 验证 upload 归属并将状态从 `uploaded` 推进到 `processing`。
-5. Edge Function 使用服务器 Secret 读取对象并调用 `AIProvider`。
-6. 未信任的模型输出由 `AIExtractionResultSchema` 校验。成功后写入 `ai_extractions.result` 并标记 `needs_review`；失败记录稳定错误码并标记 `failed`。
-7. App 展示可编辑结果。用户确认后把完整、已修改的 version 1 payload 提交到安全后端。
-8. 后端再次执行 Zod 校验，并通过单个数据库事务或 RPC 原子创建 Client、Project、Requirements、Tasks，同时把 extraction 标记为 `confirmed`。
-9. App 使用返回 ID 导航到客户详情并重新查询权威数据。
+3. App 使用 `prepare-upload` 返回的短时 token 和规范路径，将截图上传到 private bucket 的 `{user_id}/{upload_id}/source`；客户端不自行拼接路径。
+4. App 调用 `mark-uploaded`。Edge Function 按当前 session 验证对象归属、实际大小和 MIME 后，才将 upload 状态从 `pending` 更新为 `uploaded`。
+5. App 请求开始提取。Edge Function 再次验证 upload 归属并将状态从 `uploaded` 推进到 `processing`。
+6. Edge Function 使用服务器 Secret 读取对象并调用 `AIProvider`。
+7. 未信任的模型输出由 `AIExtractionResultSchema` 校验。成功后写入 `ai_extractions.result` 并标记 `needs_review`；失败记录稳定错误码并标记 `failed`。
+8. App 展示可编辑结果。用户确认后把完整、已修改的 version 1 payload 提交到安全后端。
+9. 后端再次执行 Zod 校验，并通过单个数据库事务或 RPC 原子创建 Client、Project、Requirements、Tasks，同时把 extraction 标记为 `confirmed`。
+10. App 使用返回 ID 导航到客户详情并重新查询权威数据。
 
 确认操作必须幂等：同一个 extraction 只能生成一组业务实体。网络重试不得产生重复客户或项目。
 

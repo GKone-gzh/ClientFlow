@@ -38,3 +38,7 @@ export function useAppServices(): AppServices {
 export function useDevelopmentTools(): DevelopmentTools | null {
   return useComposition().developmentTools;
 }
+
+export function useAppCapabilities(): AppServiceComposition["capabilities"] {
+  return useComposition().capabilities;
+}
