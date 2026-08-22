@@ -56,6 +56,10 @@ interface IntakeService {
 
 `confirm` 必须在服务端再次校验 payload，并通过原子事务创建 Client、Project、Requirements、Tasks。返回的四组 ID 是导航和刷新提示，不替代后续权威查询。
 
+`PrepareUploadInputSchema`、`RequestExtractionInputSchema`、`GetExtractionInputSchema` 和 `ConfirmExtractionInputSchema` 是对应服务端入口的运行时校验器。它们是现有接口的加法式导出，不改变 `IntakeService` 的三个方法签名；App 可继续通过 Repository/Service 接口调用，后端必须在信任边界使用 schema 解析未经信任的 payload。
+
+截图接单的上传、处理中、失败和成功阶段属于 App 本地 workflow 状态，不是持久化领域状态，不加入公共 contracts。测试场景和 Mock Provider 类型同样只允许存在于 App 测试替身边界。
+
 ## 6. AI Provider 接口
 
 ```ts

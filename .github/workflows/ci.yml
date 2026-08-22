@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Lint, types, tests, and executable smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+
+      - name: Configure Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint, typecheck, and test
+        run: pnpm verify
+
+      - name: Export mobile web bundle
+        if: ${{ hashFiles('apps/mobile/package.json') != '' }}
+        run: pnpm smoke:mobile
+
+      - name: Record pre-mobile baseline
+        if: ${{ hashFiles('apps/mobile/package.json') == '' }}
+        run: echo "apps/mobile is not present on this baseline; the export gate becomes mandatory when it is integrated."
+
+  database-integration:
+    name: Supabase migrations and pgTAP
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v3
+        with:
+          version: 2.84.2
+
+      - name: Start local Supabase database
+        run: supabase db start
+
+      - name: Run database tests
+        run: supabase test db
+
+      - name: Stop local Supabase services
+        if: always()
+        run: supabase stop --no-backup

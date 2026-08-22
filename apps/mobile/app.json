@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "ClientFlow",
+    "slug": "clientflow",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "clientflow",
+    "userInterfaceStyle": "light",
+    "android": {
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "output": "static"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#FFFFFF"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "允许 ClientFlow 访问相册，以选择聊天截图。",
+          "microphonePermission": false
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}
