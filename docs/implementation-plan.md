@@ -1,6 +1,6 @@
 # ClientFlow Implementation Plan
 
-最后更新：2026-08-22
+最后更新：2026-08-23
 
 ## 当前 Phase
 
@@ -20,6 +20,7 @@
 - 邮箱密码注册、登录、Session 持久化恢复、Auth 状态监听和退出。
 - 未登录/已登录路由守卫，以及恢复 Session 期间的 loading/error 门禁。
 - 可执行的真实 Supabase Auth smoke，覆盖注册、登录、持久化 Session 恢复和退出清除。
+- 真实 Supabase 远端 Auth、Expo Web 路由和 Android 设备重启/退出验收。
 
 ## 当前配置
 
@@ -30,15 +31,16 @@
 
 ## 下一步
 
-1. 按 `docs/auth-acceptance.md` 配置可用的 Supabase project URL 与 publishable key，执行远端 Auth smoke 和真实设备重启验收。
-2. 实现真实 private Storage 上传 Adapter，并通过现有 `prepare-upload` 安全边界上传截图。
+1. Phase 2 P1 已完成；在本阶段 commit、push 和 Issue 关闭后停止。
+2. 下一轮经确认后实现真实 private Storage 上传 Adapter，并通过现有 `prepare-upload` 安全边界上传截图。
 3. 将 AI Extraction、确认事务和 Client/Project/Requirement/Task Repository 切换到真实 Supabase Adapter。
 4. 端到端验证用户 A/B 数据隔离、重复确认幂等、上传失败恢复和客户详情刷新。
 
-## 阻塞项
+## 环境限制
 
-- 仓库未配置实际 Supabase URL/publishable key，因此远端 Auth smoke 和真实设备 Session 恢复仍等待公共项目参数；验收脚本与逐步清单已就绪。
-- 本机未安装 Supabase CLI、Docker、Android `adb` 或 emulator；PGlite migration/RLS 测试可运行，真实远端项目和物理设备验收不依赖本地数据库工具。
+- 真实 Supabase 公共配置和测试账号只存在于 Git 忽略的本地环境文件，不进入仓库或客户端 Secret。
+- 本机未安装 Supabase CLI、Docker、Android `adb` 或 emulator；PGlite migration/RLS 测试可运行，本阶段已通过局域网 Expo Go 完成 Android 实机验收。
+- iOS App Store 版 Expo Go 在 SDK 57 过渡期不兼容本项目；后续 iOS 原生验收应使用兼容的 Development Build/TestFlight，不降级项目 SDK。
 - 正式 Figma 尚未交付，App 保持基础 Placeholder UI。
 
 ## 每阶段完成定义
