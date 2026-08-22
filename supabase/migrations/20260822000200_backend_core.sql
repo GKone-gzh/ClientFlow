@@ -6,8 +6,8 @@ insert into storage.buckets (
   allowed_mime_types
 )
 values (
-  'intake-screenshots',
-  'intake-screenshots',
+  'chat-screenshots',
+  'chat-screenshots',
   false,
   10485760,
   array['image/jpeg', 'image/png', 'image/webp']

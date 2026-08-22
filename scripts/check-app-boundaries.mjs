@@ -27,11 +27,12 @@ for (const path of sourceFiles(mobileSource)) {
 
   const source = readFileSync(path, "utf8");
   const normalizedPath = relative(mobileSource, path).split(sep).join("/");
-  const isTestDouble =
-    normalizedPath.startsWith("mocks/") ||
-    normalizedPath.includes("/mock-") ||
+  const isTestFile =
     normalizedPath.endsWith(".test.ts") ||
     normalizedPath.endsWith(".test.tsx");
+  const isMockImplementation =
+    !isTestFile &&
+    (normalizedPath.startsWith("mocks/") || normalizedPath.includes("/mock-"));
   const isFeatureOrStore =
     normalizedPath.startsWith("features/") || normalizedPath.startsWith("store/");
 
@@ -44,9 +45,14 @@ for (const path of sourceFiles(mobileSource)) {
     );
   }
 
-  if (isTestDouble && /from\s+["']@\/services\/app-services["']/.test(source)) {
+  if (
+    isMockImplementation &&
+    /from\s+["']@\/services\/(?:compose-app-services|app-service-provider)["']/.test(
+      source,
+    )
+  ) {
     violations.push(
-      `${normalizedPath}: a test double must not import its composition root. Define the shared service shape in a neutral module.`,
+      `${normalizedPath}: a test double must not import the composition root or its provider. Depend on neutral service ports instead.`,
     );
   }
 }

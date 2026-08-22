@@ -777,11 +777,11 @@ test("private screenshot bucket is constrained and not public", async () => {
     const bucket = await db.query(`
       select id, public, file_size_limit, allowed_mime_types
       from storage.buckets
-      where id = 'intake-screenshots'
+      where id = 'chat-screenshots'
     `);
     assert.deepEqual(bucket.rows, [
       {
-        id: "intake-screenshots",
+        id: "chat-screenshots",
         public: false,
         file_size_limit: 10485760,
         allowed_mime_types: ["image/jpeg", "image/png", "image/webp"],

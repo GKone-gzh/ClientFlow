@@ -10,7 +10,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { BackendError, databaseError } from "./errors.ts";
 import { mapUpload } from "./mappers.ts";
 
-export const INTAKE_SCREENSHOTS_BUCKET = "intake-screenshots";
+export const INTAKE_SCREENSHOTS_BUCKET = "chat-screenshots";
 
 export class PrivateStorageUploadAdapter {
   constructor(

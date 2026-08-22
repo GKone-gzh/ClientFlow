@@ -7,7 +7,7 @@ and return the public contract value directly. Errors use `ContractErrorShape`.
 
 1. Call `prepare-upload` with `PrepareUploadInput`.
 2. Upload the bytes with
-   `supabase.storage.from("intake-screenshots").uploadToSignedUrl(storagePath, signedUploadToken, file)`.
+   `supabase.storage.from("chat-screenshots").uploadToSignedUrl(storagePath, signedUploadToken, file)`.
 3. Call `request-extraction` with `RequestExtractionInput` after the upload completes.
 4. Poll `get-extraction` with `GetExtractionInput` until the returned
    `AIExtraction.status` is `needs_review` or `failed`.

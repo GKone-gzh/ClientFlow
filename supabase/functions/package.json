@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "tsx --test _shared/**/*.test.ts",
+    "test:http": "tsx --test _shared/auth.test.ts _shared/handlers.test.ts",
     "typecheck": "tsc --project tsconfig.json"
   },
   "dependencies": {
