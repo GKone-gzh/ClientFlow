@@ -159,17 +159,23 @@ select throws_ok(
   'user A cannot insert a client for user B'
 );
 
-select is(
-  (
-    with changed as (
+select lives_ok(
+  $$
+    do $check$
+    declare
+      updated_rows integer;
+    begin
       update public.clients
       set name = 'Forged Update'
-      where id = '00000000-0000-4000-8000-00000000b101'
-      returning id
-    )
-    select count(*)::integer from changed
-  ),
-  0,
+      where id = '00000000-0000-4000-8000-00000000b101';
+
+      get diagnostics updated_rows = row_count;
+      if updated_rows <> 0 then
+        raise exception 'user A updated a user B client';
+      end if;
+    end
+    $check$;
+  $$,
   'user A cannot update user B client'
 );
 
