@@ -19,6 +19,7 @@
 - 可切换 Mock/Supabase Auth Adapter。
 - 邮箱密码注册、登录、Session 持久化恢复、Auth 状态监听和退出。
 - 未登录/已登录路由守卫，以及恢复 Session 期间的 loading/error 门禁。
+- 可执行的真实 Supabase Auth smoke，覆盖注册、登录、持久化 Session 恢复和退出清除。
 
 ## 当前配置
 
@@ -29,15 +30,15 @@
 
 ## 下一步
 
-1. 配置可用的 Supabase project URL 与 publishable key，执行一次真实注册、邮件确认策略、登录、重启恢复 Session 和退出的设备验收。
+1. 按 `docs/auth-acceptance.md` 配置可用的 Supabase project URL 与 publishable key，执行远端 Auth smoke 和真实设备重启验收。
 2. 实现真实 private Storage 上传 Adapter，并通过现有 `prepare-upload` 安全边界上传截图。
 3. 将 AI Extraction、确认事务和 Client/Project/Requirement/Task Repository 切换到真实 Supabase Adapter。
 4. 端到端验证用户 A/B 数据隔离、重复确认幂等、上传失败恢复和客户详情刷新。
 
 ## 阻塞项
 
-- 仓库未配置实际 Supabase URL/publishable key，因此真实远端账号创建和设备 Session 恢复尚不能执行；代码、单元测试和 Supabase 模式三平台 bundle 已验证。
-- 本机 Supabase CLI/Docker 能力仍需在执行远端/本地联调前复核；PGlite migration/RLS 测试当前可运行。
+- 仓库未配置实际 Supabase URL/publishable key，因此远端 Auth smoke 和真实设备 Session 恢复仍等待公共项目参数；验收脚本与逐步清单已就绪。
+- 本机未安装 Supabase CLI、Docker、Android `adb` 或 emulator；PGlite migration/RLS 测试可运行，真实远端项目和物理设备验收不依赖本地数据库工具。
 - 正式 Figma 尚未交付，App 保持基础 Placeholder UI。
 
 ## 每阶段完成定义

@@ -39,7 +39,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "test": "tsx --test src/**/*.test.ts",
+    "smoke:auth": "tsx scripts/supabase-auth-smoke.ts",
+    "test": "tsx --test src/**/*.test.ts scripts/**/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "private": true
