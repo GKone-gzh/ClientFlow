@@ -42,7 +42,7 @@
 
 ## ADR-006：单仓库配合独立 Git worktree
 
-- 状态：Accepted
+- 状态：Superseded by ADR-010
 - 日期：2026-08-21
 - 决策：主工作区使用 `main`，窗口2使用 `feature/backend-core`，窗口3使用 `feature/app-core`，各自对应独立目录。
 - 原因：单仓库便于原子更新公共合同和执行集成检查，worktree 避免多个窗口在同一 working tree 切分支或覆盖文件。
@@ -71,3 +71,11 @@
 - 决策：首个 schema 不创建 `ai_extractions.raw_result`。`result` 只保存通过当前版本 Zod Schema 校验的结构化数据；无效完整输出不进入数据库或日志。
 - 原因：Provider 输出来自聊天截图，可能包含客户姓名、联系方式、预算和私密对话。当前没有字段级加密、受限调试权限、TTL 和自动清理机制，长期保存仅为调试便利不符合数据最小化原则。
 - 后果：失败诊断依赖稳定 `error_code`、provider、model、schema version、correlation ID 和不含用户内容的结构化指标。未来若确需 raw output，必须先定义加密、仅服务端访问、最短保留期限、自动清理、用户删除传播和安全测试，再通过独立 migration 引入。
+
+## ADR-010：改为单人 Mainline 分阶段开发
+
+- 状态：Accepted
+- 日期：2026-08-22
+- 决策：后续开发只从最新 `main` 开始，由单一负责人按 GitHub Issue 分阶段实现、验证、提交和集成；旧 backend/app 并行分支冻结，不再作为持续开发线。
+- 原因：基础架构、App 骨架和安全后端已经进入 `main`，继续维护平行实现会增加接口漂移、重复工作和合并风险。当前优先级是尽快跑通一个真实 MVP 闭环。
+- 后果：不推翻现有模块边界或公共合同；每个可运行阶段都必须独立测试、commit、普通 push，并回写对应 Issue。旧分支只保留历史证据，不 cherry-pick 未经重新审查的批量实现。
