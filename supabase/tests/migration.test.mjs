@@ -288,6 +288,10 @@ test("initial migration creates the contracted schema and forced RLS", async () 
 
 test("RLS and composite foreign keys isolate two authenticated users", async () => {
   const db = await createDatabase();
+  const requirementB = "00000000-0000-4000-8000-00000000b301";
+  const taskB = "00000000-0000-4000-8000-00000000b401";
+  const uploadB = "00000000-0000-4000-8000-00000000b701";
+  const extractionB = "00000000-0000-4000-8000-00000000b801";
 
   try {
     await db.exec(`
@@ -305,6 +309,42 @@ test("RLS and composite foreign keys isolate two authenticated users", async () 
         '${clientB}',
         'User B Project'
       );
+
+      insert into public.requirements (id, user_id, project_id, content)
+      values ('${requirementB}', '${userB}', '${projectB}', 'User B Requirement');
+
+      insert into public.tasks (
+        id,
+        user_id,
+        project_id,
+        requirement_id,
+        title
+      )
+      values (
+        '${taskB}',
+        '${userB}',
+        '${projectB}',
+        '${requirementB}',
+        'User B Task'
+      );
+
+      insert into public.uploads (
+        id,
+        user_id,
+        storage_path,
+        mime_type,
+        byte_size
+      )
+      values (
+        '${uploadB}',
+        '${userB}',
+        '${userB}/${uploadB}/source',
+        'image/png',
+        1024
+      );
+
+      insert into public.ai_extractions (id, user_id, upload_id)
+      values ('${extractionB}', '${userB}', '${uploadB}');
 
     `);
 
@@ -330,6 +370,24 @@ test("RLS and composite foreign keys isolate two authenticated users", async () 
       "select id from public.profiles order by id",
     );
     assert.deepEqual(visibleProfiles.rows, [{ id: userA }]);
+
+    const hiddenResourceCounts = await db.query(`
+      select
+        (select count(*)::integer from public.projects) as projects,
+        (select count(*)::integer from public.requirements) as requirements,
+        (select count(*)::integer from public.tasks) as tasks,
+        (select count(*)::integer from public.uploads) as uploads,
+        (select count(*)::integer from public.ai_extractions) as extractions
+    `);
+    assert.deepEqual(hiddenResourceCounts.rows, [
+      {
+        projects: 0,
+        requirements: 0,
+        tasks: 0,
+        uploads: 0,
+        extractions: 0,
+      },
+    ]);
 
     await assert.rejects(
       db.exec(`

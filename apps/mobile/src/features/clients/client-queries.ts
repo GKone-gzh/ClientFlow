@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CreateClientInput, EntityId } from "@clientflow/contracts";
 
 import { useAppServices } from "@/services/app-service-provider";
+import { loadClientDetail } from "@/features/clients/client-detail";
 
 export const clientKeys = {
   all: ["clients"] as const,
@@ -20,21 +21,7 @@ export function useClientDetailQuery(clientId: EntityId) {
   const services = useAppServices();
   return useQuery({
     queryKey: clientKeys.detail(clientId),
-    queryFn: async () => {
-      const client = await services.clients.getById(clientId);
-      if (!client) {
-        return null;
-      }
-      const projects = await services.projects.listByClient(clientId);
-      const projectDetails = await Promise.all(
-        projects.map(async (project) => ({
-          project,
-          requirements: await services.requirements.listByProject(project.id),
-          tasks: await services.tasks.listByProject(project.id),
-        })),
-      );
-      return { client, projects: projectDetails };
-    },
+    queryFn: () => loadClientDetail(services, clientId),
   });
 }
 

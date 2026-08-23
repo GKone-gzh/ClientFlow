@@ -1,8 +1,22 @@
 import { z } from "zod";
 
 import { AIExtractionResultSchema } from "./ai-extraction.ts";
-import type { EntityId, ISODate, ISODateTime, Upload } from "./models.ts";
+import type {
+  AIExtraction,
+  Client,
+  EntityId,
+  ISODate,
+  ISODateTime,
+  Project,
+  Requirement,
+  Task,
+  Upload,
+} from "./models.ts";
 import {
+  AIExtractionStatusSchema,
+  ClientStatusSchema,
+  ProjectStatusSchema,
+  TaskStatusSchema,
   UploadStatusSchema,
   type ClientStatus,
   type ProjectStatus,
@@ -138,3 +152,91 @@ export interface ConfirmExtractionResult {
   requirementIds: EntityId[];
   taskIds: EntityId[];
 }
+
+const ISODateTimeSchema = z.string().datetime({ offset: true });
+const NullableTextSchema = z.string().nullable();
+
+export const AIExtractionSchema: z.ZodType<AIExtraction> = z
+  .object({
+    id: EntityIdSchema,
+    userId: EntityIdSchema,
+    uploadId: EntityIdSchema,
+    status: AIExtractionStatusSchema,
+    schemaVersion: z.number().int().positive(),
+    provider: NullableTextSchema,
+    model: NullableTextSchema,
+    result: AIExtractionResultSchema.nullable(),
+    errorCode: NullableTextSchema,
+    createdAt: ISODateTimeSchema,
+    updatedAt: ISODateTimeSchema,
+  })
+  .strict();
+
+export const ConfirmExtractionResultSchema: z.ZodType<ConfirmExtractionResult> =
+  z
+    .object({
+      clientId: EntityIdSchema,
+      projectId: EntityIdSchema,
+      requirementIds: z.array(EntityIdSchema),
+      taskIds: z.array(EntityIdSchema),
+    })
+    .strict();
+
+export const ClientSchema: z.ZodType<Client> = z
+  .object({
+    id: EntityIdSchema,
+    userId: EntityIdSchema,
+    name: z.string().trim().min(1),
+    contactHandle: NullableTextSchema,
+    contactChannel: NullableTextSchema,
+    notes: NullableTextSchema,
+    status: ClientStatusSchema,
+    createdAt: ISODateTimeSchema,
+    updatedAt: ISODateTimeSchema,
+  })
+  .strict();
+
+export const ProjectSchema: z.ZodType<Project> = z
+  .object({
+    id: EntityIdSchema,
+    userId: EntityIdSchema,
+    clientId: EntityIdSchema,
+    name: z.string().trim().min(1),
+    summary: NullableTextSchema,
+    budgetAmount: z.number().finite().nonnegative().nullable(),
+    budgetCurrency: z.string().length(3).nullable(),
+    dueDate: z.string().date().nullable(),
+    status: ProjectStatusSchema,
+    createdAt: ISODateTimeSchema,
+    updatedAt: ISODateTimeSchema,
+  })
+  .strict();
+
+export const RequirementSchema: z.ZodType<Requirement> = z
+  .object({
+    id: EntityIdSchema,
+    userId: EntityIdSchema,
+    projectId: EntityIdSchema,
+    content: z.string().trim().min(1),
+    sortOrder: z.number().int().nonnegative(),
+    sourceExtractionId: EntityIdSchema.nullable(),
+    createdAt: ISODateTimeSchema,
+    updatedAt: ISODateTimeSchema,
+  })
+  .strict();
+
+export const TaskSchema: z.ZodType<Task> = z
+  .object({
+    id: EntityIdSchema,
+    userId: EntityIdSchema,
+    projectId: EntityIdSchema,
+    requirementId: EntityIdSchema.nullable(),
+    title: z.string().trim().min(1),
+    description: NullableTextSchema,
+    dueAt: ISODateTimeSchema.nullable(),
+    sortOrder: z.number().int().nonnegative(),
+    status: TaskStatusSchema,
+    createdAt: ISODateTimeSchema,
+    updatedAt: ISODateTimeSchema,
+  })
+  .strict();

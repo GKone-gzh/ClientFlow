@@ -28,19 +28,19 @@
 ## 当前配置
 
 - 默认 `EXPO_PUBLIC_APP_ADAPTER=mock`，用于离线开发和自动化测试。
-- 设置 `EXPO_PUBLIC_APP_ADAPTER=supabase` 后，Auth 使用真实 Supabase；其他业务 Repository 在下一阶段替换。
+- 设置 `EXPO_PUBLIC_APP_ADAPTER=supabase` 后，Auth、截图上传、Intake Edge Functions 和业务 Repository 使用真实 Supabase；AI Provider 仍是仅运行在服务端的 Stub。
 - 客户端只读取 `EXPO_PUBLIC_SUPABASE_URL` 和 `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`。
 - `EXPO_PUBLIC_*` 会进入客户端 bundle，禁止配置 service-role、`sb_secret_` 或 AI Secret。
 
 ## 本阶段状态
 
-- Phase 2 P2 / Issue #4 已完成自动化、真实 Supabase 和 Android 真机验收，代码已 push 到 `main`，Issue 可关闭。
-- 本阶段严格停止在 `uploads.status = uploaded`，未调用 AI extraction。
+- Phase 2 P2 / Issue #4 已完成自动化、真实 Supabase 和 Android 真机验收，代码已 push 到 `main`，Issue 已关闭。
+- Phase 2 P3 / Issue #5 正在进行：Supabase Intake Adapter、真实业务 Repository 读取和 Review/Confirm 页面接线已完成本地自动化，等待真实 Supabase smoke 与 Android 真机全链路验收。
 
 ## 下一步
 
-1. 下一轮经确认后进入 Phase 2 P3，将 Intake / AI Stub Extraction / 确认流程切换到真实 Supabase Adapter。
-2. 后续再切换 Client/Project/Requirement/Task Repository，并完成端到端用户 A/B 隔离验证。
+1. 部署并配置 `request-extraction`、`get-extraction`、`confirm-extraction`，运行真实 Supabase 完整 Intake smoke。
+2. 完成 Android 真机 Review、确认和真实 Client Detail 验收，再关闭 Issue #5。
 
 ## 环境限制
 

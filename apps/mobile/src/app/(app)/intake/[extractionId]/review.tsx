@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { Fragment, useEffect } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { router, useLocalSearchParams } from "expo-router";
 import { Controller, useForm } from "react-hook-form";
@@ -79,6 +79,32 @@ export default function IntakeReviewScreen() {
                 onBlur={field.onBlur}
                 onChangeText={field.onChange}
                 value={field.value}
+              />
+            )}
+          />
+          <Text>联系方式</Text>
+          <Controller
+            control={control}
+            name="client.contactHandle"
+            render={({ field }) => (
+              <TextInput
+                accessibilityLabel="客户联系方式"
+                onBlur={field.onBlur}
+                onChangeText={(value) => field.onChange(value || null)}
+                value={field.value ?? ""}
+              />
+            )}
+          />
+          <Text>联系渠道</Text>
+          <Controller
+            control={control}
+            name="client.contactChannel"
+            render={({ field }) => (
+              <TextInput
+                accessibilityLabel="客户联系渠道"
+                onBlur={field.onBlur}
+                onChangeText={(value) => field.onChange(value || null)}
+                value={field.value ?? ""}
               />
             )}
           />
@@ -171,6 +197,39 @@ export default function IntakeReviewScreen() {
               )}
             />
           ))}
+          {resultQuery.data.suggestedTasks.map((task, index) => (
+            <Fragment key={`${task.sortOrder}-${index}`}>
+              <Text>建议任务 {index + 1}</Text>
+              <Controller
+                control={control}
+                name={`suggestedTasks.${index}.title`}
+                render={({ field }) => (
+                  <TextInput
+                    accessibilityLabel={`建议任务 ${index + 1}`}
+                    onBlur={field.onBlur}
+                    onChangeText={field.onChange}
+                    value={field.value}
+                  />
+                )}
+              />
+              <Controller
+                control={control}
+                name={`suggestedTasks.${index}.description`}
+                render={({ field }) => (
+                  <TextInput
+                    accessibilityLabel={`建议任务 ${index + 1}说明`}
+                    multiline
+                    onBlur={field.onBlur}
+                    onChangeText={(value) => field.onChange(value || null)}
+                    value={field.value ?? ""}
+                  />
+                )}
+              />
+            </Fragment>
+          ))}
+          <Text>
+            识别置信度：{Math.round(resultQuery.data.confidence * 100)}%
+          </Text>
           <Text>待确认项（每行一项）</Text>
           <Controller
             control={control}

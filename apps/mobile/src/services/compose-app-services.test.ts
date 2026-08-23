@@ -17,7 +17,7 @@ test("exposes only stable services when development tools are disabled", async (
   assert.equal((await composition.services.clients.list()).length, 5);
 });
 
-test("uses real Supabase auth without exposing mock development controls", () => {
+test("uses the complete Supabase intake composition without mock controls", () => {
   const composition = composeAppServices({
     adapter: "supabase",
     enableDevelopmentTools: true,
@@ -26,8 +26,16 @@ test("uses real Supabase auth without exposing mock development controls", () =>
   });
 
   assert.equal(composition.developmentTools, null);
-  assert.equal(composition.capabilities.extraction, false);
+  assert.equal(composition.capabilities.extraction, true);
   assert.equal(typeof composition.services.auth.getSession, "function");
+  assert.equal(
+    composition.services.intake.constructor.name,
+    "SupabaseIntakeAdapter",
+  );
+  assert.equal(
+    composition.services.clients.constructor.name,
+    "SupabaseClientRepository",
+  );
 });
 
 test("keeps controllable mock scenarios behind optional development tools", () => {

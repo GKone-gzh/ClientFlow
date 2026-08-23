@@ -24,8 +24,15 @@ export default function ClientDetailScreen() {
           {detailQuery.data.projects.map(({ project, requirements, tasks }) => (
             <View key={project.id}>
               <Text>项目：{project.name}</Text>
+              <Text>项目说明：{project.summary ?? "未填写"}</Text>
               <Text>需求：{requirements.length} 项</Text>
+              {requirements.map((requirement) => (
+                <Text key={requirement.id}>- {requirement.content}</Text>
+              ))}
               <Text>任务：{tasks.length} 项</Text>
+              {tasks.map((task) => (
+                <Text key={task.id}>- {task.title}</Text>
+              ))}
             </View>
           ))}
         </>

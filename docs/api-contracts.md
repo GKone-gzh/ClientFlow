@@ -79,7 +79,7 @@ interface IntakeService {
 
 `confirm` 必须在服务端再次校验 payload，并通过原子事务创建 Client、Project、Requirements、Tasks。返回的四组 ID 是导航和刷新提示，不替代后续权威查询。
 
-`PrepareUploadInputSchema`、`MarkUploadedInputSchema`、`RequestExtractionInputSchema`、`GetExtractionInputSchema` 和 `ConfirmExtractionInputSchema` 是对应服务端入口的运行时校验器。`PrepareUploadResultSchema` 和 `UploadSchema` 用于 App 校验跨 Edge Function 边界的响应。它们不改变 Repository/Service 的现有方法签名；App 继续通过 Repository/Service 接口调用，服务端与 App 都必须在各自信任边界解析未经信任的 payload。
+`PrepareUploadInputSchema`、`MarkUploadedInputSchema`、`RequestExtractionInputSchema`、`GetExtractionInputSchema` 和 `ConfirmExtractionInputSchema` 是对应服务端入口的运行时校验器。`PrepareUploadResultSchema`、`UploadSchema`、`AIExtractionSchema`、`ConfirmExtractionResultSchema` 以及 Client/Project/Requirement/Task 的领域 Schema 用于 App 校验跨 Edge Function 或数据库边界的响应。它们不改变 Repository/Service 的现有方法签名；App 继续通过 Repository/Service 接口调用，服务端与 App 都必须在各自信任边界解析未经信任的 payload。
 
 截图接单的上传、处理中、失败和成功阶段属于 App 本地 workflow 状态，不是持久化领域状态，不加入公共 contracts。测试场景和 Mock Provider 类型同样只允许存在于 App 测试替身边界。
 

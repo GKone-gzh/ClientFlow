@@ -3,6 +3,9 @@ import test from "node:test";
 
 import { AIExtractionResultSchema } from "./ai-extraction.ts";
 import {
+  AIExtractionSchema,
+  ClientSchema,
+  ConfirmExtractionResultSchema,
   ConfirmExtractionInputSchema,
   GetExtractionInputSchema,
   MarkUploadedInputSchema,
@@ -146,6 +149,54 @@ test("validates upload boundary responses", () => {
       byteSize: 1024,
       status: "uploaded",
       errorCode: null,
+      createdAt: "2026-08-23T00:00:00.000Z",
+      updatedAt: "2026-08-23T00:00:00.000Z",
+    }).success,
+    true,
+  );
+});
+
+test("validates extraction, confirmation, and business entity responses", () => {
+  const userId = "00000000-0000-4000-8000-000000000002";
+  const extractionId = "00000000-0000-4000-8000-000000000003";
+  const uploadId = "00000000-0000-4000-8000-000000000004";
+  const clientId = "00000000-0000-4000-8000-000000000005";
+  const projectId = "00000000-0000-4000-8000-000000000006";
+
+  assert.equal(
+    AIExtractionSchema.safeParse({
+      id: extractionId,
+      userId,
+      uploadId,
+      status: "needs_review",
+      schemaVersion: 1,
+      provider: "stub",
+      model: "configured-result-v1",
+      result: validExtraction,
+      errorCode: null,
+      createdAt: "2026-08-23T00:00:00.000Z",
+      updatedAt: "2026-08-23T00:00:00.000Z",
+    }).success,
+    true,
+  );
+  assert.equal(
+    ConfirmExtractionResultSchema.safeParse({
+      clientId,
+      projectId,
+      requirementIds: [],
+      taskIds: [],
+    }).success,
+    true,
+  );
+  assert.equal(
+    ClientSchema.safeParse({
+      id: clientId,
+      userId,
+      name: "Acme",
+      contactHandle: null,
+      contactChannel: null,
+      notes: null,
+      status: "lead",
       createdAt: "2026-08-23T00:00:00.000Z",
       updatedAt: "2026-08-23T00:00:00.000Z",
     }).success,

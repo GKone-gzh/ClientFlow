@@ -90,6 +90,96 @@ test("validated provider output is the only result sent to persistence", async (
   assert.deepEqual(persisted, validResult);
 });
 
+test("provider failures mark both records failed and never report completion", async () => {
+  const failureCodes: string[] = [];
+  let completed = false;
+  const service = new SupabaseIntakeService(
+    {} as SupabaseClient,
+    {
+      markCompleted: async () => {
+        completed = true;
+      },
+      markFailed: async (_id, code) => {
+        failureCodes.push(`upload:${code}`);
+      },
+      markProcessing: async () => undefined,
+      verifyAndMarkUploaded: async () => ({
+        imageBytes: new Uint8Array([1, 2, 3]),
+        upload: createUpload(),
+      }),
+    },
+    {
+      complete: async () => {
+        throw new Error("not expected");
+      },
+      fail: async (_id, code) => {
+        failureCodes.push(`extraction:${code}`);
+      },
+      findByUpload: async () => null,
+      getById: async () => null,
+      start: async () => createExtraction("processing", null),
+    },
+    {
+      modelName: "failure-model",
+      providerName: "failure-provider",
+      extractScreenshot: async () => {
+        throw new Error("sensitive provider failure");
+      },
+    },
+  );
+
+  await assert.rejects(service.requestExtraction(uploadId), (error) => {
+    return (
+      error instanceof BackendError &&
+      error.code === "extraction_failed" &&
+      !error.message.includes("sensitive")
+    );
+  });
+  assert.equal(completed, false);
+  assert.deepEqual(failureCodes.sort(), [
+    "extraction:provider_error",
+    "upload:provider_error",
+  ]);
+});
+
+test("an invalid upload state stops extraction before the provider runs", async () => {
+  let providerCalls = 0;
+  const conflict = new BackendError({
+    code: "conflict",
+    message: "The upload cannot be verified in its current state",
+    status: 409,
+  });
+  const service = new SupabaseIntakeService(
+    {} as SupabaseClient,
+    {
+      markCompleted: async () => undefined,
+      markFailed: async () => undefined,
+      markProcessing: async () => undefined,
+      verifyAndMarkUploaded: async () => {
+        throw conflict;
+      },
+    },
+    {
+      complete: async () => createExtraction("needs_review", validResult),
+      fail: async () => undefined,
+      findByUpload: async () => null,
+      getById: async () => null,
+      start: async () => createExtraction("processing", null),
+    },
+    {
+      modelName: "test-model",
+      providerName: "test-provider",
+      extractScreenshot: async () => {
+        providerCalls += 1;
+        return validResult;
+      },
+    },
+  );
+
+  await assert.rejects(service.requestExtraction(uploadId), conflict);
+  assert.equal(providerCalls, 0);
+});
+
 const validResult: AIExtractionResult = {
   schemaVersion: 1,
   client: { name: "Acme", contactHandle: null, contactChannel: null },
