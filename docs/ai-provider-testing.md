@@ -22,7 +22,8 @@ the App.
 
 ## Real Qwen smoke
 
-`pnpm smoke:qwen` reuses the ignored `apps/mobile/.env.local` and
+`pnpm smoke:qwen` reuses the ignored `apps/mobile/.env.local`,
+`apps/mobile/.env.auth-smoke.local`, and
 `apps/mobile/.env.intake-smoke.local` files used by the real Intake smoke. It
 uploads the configured test screenshot, requires the server result to report
 provider `qwen`, model `qwen3-vl-plus`, and status `needs_review`, validates the

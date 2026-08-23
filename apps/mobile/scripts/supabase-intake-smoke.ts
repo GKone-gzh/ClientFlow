@@ -359,7 +359,11 @@ function requireValue(value: string | undefined, variable: string) {
 }
 
 async function main() {
-  loadSmokeEnvironment([".env.local", ".env.intake-smoke.local"]);
+  loadSmokeEnvironment([
+    ".env.local",
+    ".env.auth-smoke.local",
+    ".env.intake-smoke.local",
+  ]);
   try {
     const result = await runSupabaseIntakeSmoke({
       CLIENTFLOW_AUTH_TEST_EMAIL: process.env.CLIENTFLOW_AUTH_TEST_EMAIL,

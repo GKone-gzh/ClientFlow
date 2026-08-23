@@ -251,6 +251,7 @@ function requireValue(value: string | undefined, variable: string): string {
 async function main() {
   loadSmokeEnvironment([
     ".env.local",
+    ".env.auth-smoke.local",
     ".env.intake-smoke.local",
     ".env.qwen-smoke.local",
   ]);
