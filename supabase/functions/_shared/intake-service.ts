@@ -165,7 +165,10 @@ function hasDanglingRequirementReference(result: AIExtractionResult): boolean {
 }
 
 function normalizeProviderError(error: unknown): BackendError {
-  if (error instanceof BackendError && error.code === "extraction_failed") {
+  if (
+    error instanceof BackendError &&
+    (error.code === "extraction_failed" || error.code === "rate_limited")
+  ) {
     return error;
   }
 

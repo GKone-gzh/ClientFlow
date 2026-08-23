@@ -8,14 +8,17 @@ import { BackendError } from "./errors";
 import { PrivateStorageUploadAdapter } from "./storage";
 
 test("private storage verifies downloaded bytes and MIME type", async () => {
+  const pngBytes = new Uint8Array([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+  ]);
   const admin = createStorageClient(
-    new Blob([new Uint8Array([1, 2, 3])], { type: "image/png" }),
+    new Blob([pngBytes], { type: "image/png" }),
   );
   const storage = new PrivateStorageUploadAdapter(admin);
 
-  const bytes = await storage.downloadVerified(createUpload());
+  const bytes = await storage.downloadVerified(createUpload(pngBytes.byteLength));
 
-  assert.deepEqual(bytes, new Uint8Array([1, 2, 3]));
+  assert.deepEqual(bytes, pngBytes);
 });
 
 test("private storage rejects an object whose declared size does not match", async () => {
@@ -25,7 +28,20 @@ test("private storage rejects an object whose declared size does not match", asy
   const storage = new PrivateStorageUploadAdapter(admin);
 
   await assert.rejects(
-    storage.downloadVerified(createUpload()),
+    storage.downloadVerified(createUpload(3)),
+    (error) => error instanceof BackendError && error.code === "upload_failed",
+  );
+});
+
+test("private storage rejects bytes that do not match the declared image MIME", async () => {
+  const disguisedBytes = new Uint8Array([1, 2, 3]);
+  const admin = createStorageClient(
+    new Blob([disguisedBytes], { type: "image/png" }),
+  );
+  const storage = new PrivateStorageUploadAdapter(admin);
+
+  await assert.rejects(
+    storage.downloadVerified(createUpload(disguisedBytes.byteLength)),
     (error) => error instanceof BackendError && error.code === "upload_failed",
   );
 });
@@ -40,14 +56,14 @@ function createStorageClient(blob: Blob): SupabaseClient {
   } as unknown as SupabaseClient;
 }
 
-function createUpload(): Upload {
+function createUpload(byteSize: number): Upload {
   return {
     id: "00000000-0000-4000-8000-000000000701",
     userId: "00000000-0000-4000-8000-000000000001",
     storagePath:
       "00000000-0000-4000-8000-000000000001/00000000-0000-4000-8000-000000000701/source",
     mimeType: "image/png",
-    byteSize: 3,
+    byteSize,
     status: "pending",
     errorCode: null,
     createdAt: "2026-08-22T00:00:00.000Z",

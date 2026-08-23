@@ -142,6 +142,48 @@ test("provider failures mark both records failed and never report completion", a
   ]);
 });
 
+test("provider rate limits preserve the stable retryable contract", async () => {
+  const service = new SupabaseIntakeService(
+    {} as SupabaseClient,
+    {
+      markCompleted: async () => undefined,
+      markFailed: async () => undefined,
+      markProcessing: async () => undefined,
+      verifyAndMarkUploaded: async () => ({
+        imageBytes: new Uint8Array([1, 2, 3]),
+        upload: createUpload(),
+      }),
+    },
+    {
+      complete: async () => createExtraction("needs_review", validResult),
+      fail: async () => undefined,
+      findByUpload: async () => null,
+      getById: async () => null,
+      start: async () => createExtraction("processing", null),
+    },
+    {
+      modelName: "qwen3-vl-plus",
+      providerName: "qwen",
+      extractScreenshot: async () => {
+        throw new BackendError({
+          code: "rate_limited",
+          message: "The Qwen provider rate limit was reached",
+          retryable: true,
+          status: 429,
+        });
+      },
+    },
+  );
+
+  await assert.rejects(service.requestExtraction(uploadId), (error) => {
+    return (
+      error instanceof BackendError &&
+      error.code === "rate_limited" &&
+      error.retryable
+    );
+  });
+});
+
 test("an invalid upload state stops extraction before the provider runs", async () => {
   let providerCalls = 0;
   const conflict = new BackendError({

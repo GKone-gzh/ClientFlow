@@ -67,7 +67,16 @@ export class PrivateStorageUploadAdapter {
       });
     }
 
-    return new Uint8Array(await data.arrayBuffer());
+    const imageBytes = new Uint8Array(await data.arrayBuffer());
+    if (!hasExpectedImageSignature(imageBytes, upload.mimeType)) {
+      throw new BackendError({
+        code: "upload_failed",
+        message: "The uploaded screenshot content does not match its MIME type",
+        status: 422,
+      });
+    }
+
+    return imageBytes;
   }
 
   async remove(storagePath: string): Promise<void> {
@@ -84,6 +93,29 @@ export class PrivateStorageUploadAdapter {
       });
     }
   }
+}
+
+function hasExpectedImageSignature(bytes: Uint8Array, mimeType: string): boolean {
+  if (mimeType === "image/jpeg") {
+    return bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  }
+  if (mimeType === "image/png") {
+    return matchesBytes(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  }
+  if (mimeType === "image/webp") {
+    return (
+      matchesBytes(bytes, [0x52, 0x49, 0x46, 0x46]) &&
+      matchesBytes(bytes.subarray(8), [0x57, 0x45, 0x42, 0x50])
+    );
+  }
+  return false;
+}
+
+function matchesBytes(bytes: Uint8Array, expected: number[]): boolean {
+  return (
+    bytes.byteLength >= expected.length &&
+    expected.every((value, index) => bytes[index] === value)
+  );
 }
 
 export class SupabaseUploadRepository implements UploadRepository {

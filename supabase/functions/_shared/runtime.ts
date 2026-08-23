@@ -7,7 +7,10 @@ import type {
 } from "@clientflow/contracts";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-import { ConfiguredStubAIProvider } from "./ai-provider.ts";
+import {
+  createServerAIProvider,
+  type ServerAIProvider,
+} from "./ai-provider.ts";
 import { SupabaseAuthSessionAdapter } from "./auth.ts";
 import { BackendError } from "./errors.ts";
 import type { BackendFacade, BackendFactory } from "./handlers.ts";
@@ -37,9 +40,7 @@ export function createRuntimeBackendFactory(
       global: { headers: { authorization: `Bearer ${accessToken}` } },
     }),
   );
-  const provider = new ConfiguredStubAIProvider(
-    getEnvironment("AI_PROVIDER_STUB_RESULT_JSON"),
-  );
+  const provider = createServerAIProvider(getEnvironment);
 
   return async (request) => {
     const session = await auth.requireSession(request);
@@ -51,7 +52,7 @@ function createFacade(
   admin: SupabaseClient,
   authenticatedClient: SupabaseClient,
   userId: string,
-  provider: ConfiguredStubAIProvider,
+  provider: ServerAIProvider,
 ): BackendFacade {
   const storage = new PrivateStorageUploadAdapter(admin);
   const uploads = new SupabaseUploadRepository(admin, storage, userId);
