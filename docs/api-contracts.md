@@ -135,6 +135,7 @@ interface ContractErrorShape {
 - 同一 upload 已处于 `processing` 时安全返回或拒绝，不自动再次付费调用。
 - 每用户同时最多一个有效 extraction；滚动 1 分钟/1 小时/24 小时默认额度分别为 5/30/100。
 - 数据库必须在 Provider 调用前原子完成额度检查、processing 状态与 usage 预约。
+- App 仍只提交 `uploadId`。Edge 验证 Session 后，通过 server-only client 把已验证 user ID、固定 provider/model 和 request ID 传给 service-role-only reservation RPC；客户端不能直接执行 AI 状态 RPC。
 - Edge 响应携带 `x-request-id`；若客户端提供的 ID 不符合安全格式，服务端重新生成。
 
 ## 10. 建议路由命名

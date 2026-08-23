@@ -50,10 +50,11 @@
 - Native Session 已改用 SecureStore 版本化分块 adapter；首次读取会从 AsyncStorage 安全迁移并删除旧值，退出同时清理两侧。Web storage 保持独立。
 - Mock/Supabase composition 已拆分；Supabase production 路径不创建 Mock services 且始终不暴露 development tools。production 缺少 adapter 或选择 Mock 会 fail closed。
 - Public env 已拒绝 service-role、`sb_secret_`、AI Provider、DashScope 和 admin token 类配置；生产 Web smoke 显式验证 Supabase composition。
+- 新 migration 已增加 server-only AI rate-limit config、usage 台账与原子 reserve/complete/fail RPC。默认并发 1、滚动分钟 5、小时 30、24 小时 100；`authenticated` 无 private 表或 AI 状态 RPC 权限。
 
 ## 下一步
 
-1. 以新 migration 实现数据库并发锁、滚动额度和 server-only AI usage，再接入 Edge service。
+1. 将 Edge Intake service 接入数据库原子 reserve/complete/fail，并记录可靠 Provider usage。
 2. 增加 request ID、安全日志、权限攻击测试和基础 Security CI。
 3. 部署并完成真实 Supabase、User A/B、额度、重复请求和 Android 真机全链路回归；全部通过后关闭 Issue #7。
 

@@ -14,11 +14,39 @@ const clientA = "00000000-0000-4000-8000-00000000a101";
 const clientB = "00000000-0000-4000-8000-00000000b101";
 const projectB = "00000000-0000-4000-8000-00000000b201";
 
+const validExtractionResult = {
+  schemaVersion: 1,
+  client: {
+    name: "Acme",
+    contactHandle: "@acme",
+    contactChannel: "wechat",
+  },
+  project: {
+    name: "Launch site",
+    summary: "A focused launch",
+    budgetAmount: 12000,
+    budgetCurrency: "CNY",
+    dueDate: "2026-09-30",
+  },
+  requirements: [{ content: "Responsive page", sortOrder: 0 }],
+  suggestedTasks: [
+    {
+      title: "Build layout",
+      description: null,
+      requirementIndex: 0,
+      sortOrder: 0,
+    },
+  ],
+  confidence: 0.91,
+  warnings: [],
+};
+
 const bootstrapSql = `
   create schema auth;
   create schema storage;
   create role anon nologin;
   create role authenticated nologin;
+  create role service_role nologin bypassrls;
 
   create table auth.users (
     id uuid primary key,
@@ -845,6 +873,280 @@ test("private screenshot bucket is constrained and not public", async () => {
         allowed_mime_types: ["image/jpeg", "image/png", "image/webp"],
       },
     ]);
+  } finally {
+    await db.close();
+  }
+});
+
+test("AI reservations are server-only, concurrent-safe, and user-isolated", async () => {
+  const db = await createDatabase();
+  const uploadA1 = "00000000-0000-4000-8000-00000000a901";
+  const uploadA2 = "00000000-0000-4000-8000-00000000a902";
+  const uploadB1 = "00000000-0000-4000-8000-00000000b901";
+  const requestA1 = "10000000-0000-4000-8000-000000000001";
+  const requestA2 = "10000000-0000-4000-8000-000000000002";
+  const requestB1 = "10000000-0000-4000-8000-000000000003";
+
+  const reserve = (userId, uploadId, requestId) =>
+    db.query(
+      `select * from public.reserve_ai_extraction(
+        $1::uuid,
+        $2::uuid,
+        $3::uuid,
+        'qwen',
+        'qwen3-vl-plus'
+      )`,
+      [userId, uploadId, requestId],
+    );
+
+  try {
+    await db.exec(`
+      insert into auth.users (id) values ('${userA}'), ('${userB}');
+      insert into public.uploads (
+        id,
+        user_id,
+        storage_path,
+        mime_type,
+        byte_size,
+        status
+      )
+      values
+        ('${uploadA1}', '${userA}', '${userA}/${uploadA1}/source', 'image/png', 10, 'uploaded'),
+        ('${uploadA2}', '${userA}', '${userA}/${uploadA2}/source', 'image/png', 10, 'uploaded'),
+        ('${uploadB1}', '${userB}', '${userB}/${uploadB1}/source', 'image/png', 10, 'uploaded');
+      set role authenticated;
+      select set_config('request.jwt.claim.sub', '${userA}', false);
+    `);
+
+    await assert.rejects(
+      reserve(userA, uploadA1, requestA1),
+      /permission denied/i,
+    );
+
+    await db.exec("reset role; set role service_role");
+    const [first, duplicate] = await Promise.allSettled([
+      reserve(userA, uploadA1, requestA1),
+      reserve(userA, uploadA1, requestA2),
+    ]);
+    assert.equal(
+      [first, duplicate].filter(({ status }) => status === "fulfilled").length,
+      1,
+    );
+    assert.equal(
+      [first, duplicate].filter(({ status }) => status === "rejected").length,
+      1,
+    );
+
+    await assert.rejects(
+      reserve(userA, uploadA2, requestA2),
+      /concurrent extraction limit reached/i,
+    );
+    const independent = await reserve(userB, uploadB1, requestB1);
+    assert.equal(independent.rows[0].should_invoke_provider, true);
+
+    await db.exec("reset role");
+    const state = await db.query(`
+      select
+        (select count(*)::integer from public.ai_extractions) as extractions,
+        (select count(*)::integer from private.ai_usage) as usage,
+        (
+          select count(*)::integer
+          from public.uploads
+          where status = 'processing'
+        ) as processing_uploads
+    `);
+    assert.deepEqual(state.rows, [
+      { extractions: 2, usage: 2, processing_uploads: 2 },
+    ]);
+
+    const usageColumns = await db.query(`
+      select column_name
+      from information_schema.columns
+      where table_schema = 'private'
+        and table_name = 'ai_usage'
+      order by ordinal_position
+    `);
+    assert.deepEqual(
+      usageColumns.rows.map(({ column_name }) => column_name),
+      [
+        "id",
+        "user_id",
+        "extraction_id",
+        "request_id",
+        "provider",
+        "model",
+        "started_at",
+        "completed_at",
+        "status",
+        "duration_ms",
+        "attempt_count",
+        "input_tokens",
+        "output_tokens",
+        "error_code",
+      ],
+    );
+
+    await db.exec(`
+      set role authenticated;
+      select set_config('request.jwt.claim.sub', '${userA}', false);
+    `);
+    await assert.rejects(
+      db.query("select * from private.ai_usage"),
+      /permission denied/i,
+    );
+  } finally {
+    await db.close();
+  }
+});
+
+test("AI rolling limits and usage completion are enforced before Provider work", async () => {
+  const db = await createDatabase();
+  const uploadIds = Array.from(
+    { length: 5 },
+    (_, index) => `00000000-0000-4000-8000-00000000aa0${index + 1}`,
+  );
+  const uploadB = "00000000-0000-4000-8000-00000000bb01";
+  let requestCounter = 10;
+
+  const reserve = async (userId, uploadId) => {
+    requestCounter += 1;
+    return db.query(
+      `select * from public.reserve_ai_extraction(
+        $1::uuid,
+        $2::uuid,
+        $3::uuid,
+        'qwen',
+        'qwen3-vl-plus'
+      )`,
+      [
+        userId,
+        uploadId,
+        `20000000-0000-4000-8000-${requestCounter.toString().padStart(12, "0")}`,
+      ],
+    );
+  };
+  const complete = (userId, extractionId) =>
+    db.query(
+      `select * from public.complete_ai_extraction(
+        $1::uuid,
+        $2::uuid,
+        $3::jsonb,
+        250,
+        1,
+        120,
+        40
+      )`,
+      [userId, extractionId, JSON.stringify(validExtractionResult)],
+    );
+
+  try {
+    await db.exec(`
+      insert into auth.users (id) values ('${userA}'), ('${userB}');
+      update private.ai_rate_limit_config
+      set minute_limit = 2, hour_limit = 3, daily_limit = 4
+      where id = 1;
+      insert into public.uploads (
+        id,
+        user_id,
+        storage_path,
+        mime_type,
+        byte_size,
+        status
+      )
+      select
+        id,
+        '${userA}'::uuid,
+        '${userA}/' || id::text || '/source',
+        'image/png',
+        10,
+        'uploaded'::public.upload_status
+      from unnest(array[${uploadIds.map((id) => `'${id}'::uuid`).join(",")}]) as ids (id);
+      insert into public.uploads (
+        id,
+        user_id,
+        storage_path,
+        mime_type,
+        byte_size,
+        status
+      ) values (
+        '${uploadB}',
+        '${userB}',
+        '${userB}/${uploadB}/source',
+        'image/png',
+        10,
+        'uploaded'
+      );
+      set role service_role;
+    `);
+
+    for (const uploadId of uploadIds.slice(0, 2)) {
+      const reservation = await reserve(userA, uploadId);
+      await complete(userA, reservation.rows[0].extraction_id);
+    }
+    await assert.rejects(reserve(userA, uploadIds[2]), /minute extraction limit/i);
+
+    await db.exec(`
+      reset role;
+      update private.ai_usage
+      set started_at = clock_timestamp() - interval '2 minutes'
+      where user_id = '${userA}';
+      set role service_role;
+    `);
+    const third = await reserve(userA, uploadIds[2]);
+    await complete(userA, third.rows[0].extraction_id);
+    await assert.rejects(reserve(userA, uploadIds[3]), /hour extraction limit/i);
+
+    await db.exec(`
+      reset role;
+      update private.ai_usage
+      set started_at = clock_timestamp() - interval '2 hours'
+      where user_id = '${userA}';
+      set role service_role;
+    `);
+    const fourth = await reserve(userA, uploadIds[3]);
+    await complete(userA, fourth.rows[0].extraction_id);
+    await assert.rejects(reserve(userA, uploadIds[4]), /daily extraction quota/i);
+
+    const userBReservation = await reserve(userB, uploadB);
+    assert.equal(userBReservation.rows[0].should_invoke_provider, true);
+
+    await db.exec("reset role");
+    const completedUsage = await db.query(`
+      select
+        status,
+        duration_ms,
+        attempt_count,
+        input_tokens,
+        output_tokens,
+        error_code
+      from private.ai_usage
+      where user_id = '${userA}'
+      order by request_id
+      limit 1
+    `);
+    assert.deepEqual(completedUsage.rows, [
+      {
+        status: "completed",
+        duration_ms: 250,
+        attempt_count: 1,
+        input_tokens: 120,
+        output_tokens: 40,
+        error_code: null,
+      },
+    ]);
+
+    const completedExtractionId = third.rows[0].extraction_id;
+    await db.exec("set role service_role");
+    const sequentialRetry = await reserve(userA, uploadIds[2]);
+    assert.equal(sequentialRetry.rows[0].extraction_id, completedExtractionId);
+    assert.equal(sequentialRetry.rows[0].should_invoke_provider, false);
+    await db.exec("reset role");
+    const duplicateUsage = await db.query(`
+      select count(*)::integer as count
+      from private.ai_usage
+      where extraction_id = '${completedExtractionId}'
+    `);
+    assert.deepEqual(duplicateUsage.rows, [{ count: 1 }]);
   } finally {
     await db.close();
   }

@@ -153,7 +153,7 @@ MVP 首个 schema **不创建 `raw_result` 列**。`result` 只允许保存通�
 
 服务端专用集中配置表。MVP 默认：每用户并发 `1`，滚动 1 分钟 `5`，滚动 1 小时 `30`，滚动 24 小时 `100`。配置只由 migration 或受控管理员流程修改，不接受客户端参数。
 
-开始 extraction 的数据库入口必须在单个事务中对当前用户获取 transaction-scoped advisory lock，检查时间窗 usage 和有效 processing 租约，锁定 upload/extraction，创建 usage 预约并推进状态。owner 始终由 `auth.uid()` 派生。Provider 完成/失败入口只允许受控服务端调用，并原子更新 extraction、upload 和 usage。
+开始 extraction 的数据库入口必须在单个事务中对当前用户获取 transaction-scoped advisory lock，检查时间窗 usage 和有效 processing 租约，锁定 upload/extraction，创建 usage 预约并推进状态。预约、完成和失败 RPC 只授予 `service_role`；`p_user_id` 只能由已经验证 Supabase Session 的 Edge Function 传入，App DTO 不包含该字段，`authenticated` 不能直接执行这些 RPC。完成和失败入口原子更新 extraction、upload 和 usage。
 
 ## 4. RLS 原则
 
@@ -191,3 +191,4 @@ MVP 首个 schema **不创建 `raw_result` 列**。`result` 只允许保存通�
 - `authenticated` 权限矩阵：profiles 为 select 和 `display_name` 列 update；clients 为 select 及公共 Create/Update DTO 列写入；projects 为 select 及公共 Create/Update DTO 列写入，其中 `client_id` 只允许 insert；requirements、tasks、uploads、ai_extractions 为 owner select-only。ID、owner、创建时间及 Upload/Extraction 状态、Provider、模型结果和确认字段只能由数据库默认值或后续受控服务端入口写入。
 - Schema 与 RLS 验证位于 `supabase/tests/database`；无 Docker 环境的 migration/RLS 回归测试位于 `supabase/tests/migration.test.mjs`。
 - Phase 2.5 只通过新 migration 增加 AI usage、集中额度配置和原子入口；不得修改已发布 migration。时间窗使用接受请求的 usage 记录计数，processing/completed/failed 均计入，因为它们都可能已产生 Provider 成本。
+- `20260824000100_ai_abuse_controls.sql` 已新增 `private.ai_rate_limit_config`、`private.ai_usage` 及 service-role-only `reserve_ai_extraction`、`complete_ai_extraction`、`fail_ai_extraction`。普通 `authenticated` 无 private 表权限和上述 RPC 执行权限。
