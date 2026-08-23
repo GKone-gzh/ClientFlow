@@ -94,6 +94,8 @@ MVP 不持久化未通过校验的完整 Provider raw output，也不在日志�
 - 日志脱敏，不记录截图内容、完整模型输出或认证令牌。
 - 用户确认前不创建正式 Client/Project/Task 数据。
 
+首个真实实现由项目所有者选择阿里云百炼 `qwen3-vl-plus`。服务端以非思考模式请求 JSON Object，并继续把返回内容视为不可信 `unknown`。`AI_PROVIDER=stub|qwen` 是 Edge Function 的 server-only 运行时开关；Qwen API Key 只能配置为 Supabase Secret `DASHSCOPE_API_KEY`。客户端不能选择 Provider、模型、endpoint 或请求参数。
+
 ## 6. 前后端关系
 
 客户端 Repository 实现可封装 Supabase SDK，但调用者只依赖 `@clientflow/contracts` 中的接口。服务端负责授权、归属、状态转换和事务；客户端负责输入、呈现和交互状态。

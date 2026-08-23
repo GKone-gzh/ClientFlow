@@ -4,11 +4,11 @@
 
 ## 当前 Phase
 
-**Phase 2：单人 Mainline MVP 主链路联调**
+**Phase 2 P4：接入首个真实视觉 AI Provider**
 
-唯一目标是跑通：真实注册/登录 -> 私有截图上传 -> AI Stub -> 结果修改确认 -> 原子创建 Client/Project/Requirements/Tasks -> 真实客户详情读取。
+唯一目标是保持现有真实主链路和 Stub 测试能力，同时增加 server-only `qwen3-vl-plus`，使真实聊天截图经 private Storage、Qwen、Zod 校验进入 `needs_review`，并继续完成确认和真实客户详情读取。
 
-正式 Figma UI、付费 AI、支付订阅和额外 CRM 功能不在当前范围。
+第二个 AI Provider、自动模型路由、正式 Figma UI、支付订阅和额外 CRM 功能不在当前范围。
 
 ## 已完成
 
@@ -41,11 +41,13 @@
 
 - Phase 2 P2 / Issue #4 已完成自动化、真实 Supabase 和 Android 真机验收，代码已 push 到 `main`，Issue 已关闭。
 - Phase 2 P3 / Issue #5 已完成自动化、真实 Supabase、User A/B 隔离和 Android 真机全链路验收，最终文档已提交，Issue 已关闭。
+- Phase 2 P4 / Issue #6 已开始；项目所有者已选择阿里云百炼 `qwen3-vl-plus`，正在实现真实 Provider Adapter、成本/超时保护和安全测试。
 
 ## 下一步
 
-1. 关闭 Issue #5 后保持当前 MVP 边界，不自动开始真实 AI、正式 UI、支付、订阅或额外 CRM。
-2. 下一阶段需单独批准并建立 Issue；建议先确定真实 AI Provider 的安全评估、成本上限、超时/重试和数据保留策略，再接入任何付费模型。
+1. 先完成 `AI_PROVIDER=stub|qwen` 服务端切换、Qwen HTTP Adapter、稳定错误映射、超时、有限重试和安全日志测试。
+2. 配置 `DASHSCOPE_API_KEY` Supabase Secret 后执行真实 Provider smoke、少量准确率验收和 Android 真机闭环。
+3. Issue #6 完成后立即停止，不开始第二个 Provider、正式 UI、支付、订阅或额外 CRM。
 
 ## 环境限制
 

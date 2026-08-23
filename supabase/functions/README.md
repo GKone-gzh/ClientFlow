@@ -31,3 +31,10 @@ to the confirmation endpoint.
 - `AI_PROVIDER_STUB_RESULT_JSON`: server-only JSON returned by the Phase 1 AI
   stub. It must pass `AIExtractionResultSchema`; invalid or absent values fail
   extraction without storing the raw value.
+- `AI_PROVIDER`: server-only provider selector. Supported values are `stub` and
+  `qwen`; missing values default to `stub` so deployments never begin paid AI
+  calls implicitly.
+- `DASHSCOPE_API_KEY`: server-only Alibaba Cloud Model Studio key required only
+  when `AI_PROVIDER=qwen`. The Qwen adapter uses the China (Beijing) endpoint
+  and the owner-selected fixed model `qwen3-vl-plus`. Never expose this value
+  through `EXPO_PUBLIC_*`, logs, errors, Issues, or test snapshots.

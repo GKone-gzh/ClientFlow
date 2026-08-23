@@ -87,3 +87,11 @@
 - 决策：`@clientflow/contracts` 内部相对模块使用显式 `.ts` 扩展，使同一源码可由 Expo/TypeScript 和 Supabase Deno bundler 解析。Edge Function 使用 server-only Supabase verifier 对 bearer token 执行 `auth.getUser(token)`，验证成功后才创建携带该用户 Authorization 的 RLS client。
 - 原因：远端 Deno bundler 不接受共享包的无扩展名相对导入；同时托管函数环境中的自动 public key 与当前项目用户 token 验证不一致。服务端已有 secret key，适合作为 Auth API 的可信调用凭据，但用户身份仍必须来自并绑定到已验证 token。
 - 后果：`allowImportingTsExtensions` 是 workspace 编译门禁；App 不获得任何 server key；无效 token 不创建用户 client；admin client 仅用于 token 验证、私有 Storage 和显式 owner 约束的数据操作，用户 RPC 继续携带已验证用户 Authorization 以执行 RLS。
+
+## ADR-012：首个真实视觉 Provider 使用 Qwen3-VL-Plus
+
+- 状态：Accepted
+- 日期：2026-08-23
+- 决策：由项目所有者明确选择阿里云百炼 `qwen3-vl-plus` 作为首个且唯一的真实视觉模型。运行时通过 server-only `AI_PROVIDER=stub|qwen` 切换；`qwen` 使用华北 2（北京）OpenAI-compatible endpoint 和 `DASHSCOPE_API_KEY`，模型名固定为 `qwen3-vl-plus`。
+- 原因：当前任务需要中文聊天截图理解、图片输入和结构化 JSON 输出；Qwen3-VL-Plus 官方支持这些能力。使用非思考模式和 JSON Object 约束可减少输出解析失败，但不能替代服务端 Zod 校验。
+- 后果：`ConfiguredStubAIProvider` 继续用于自动化测试和本地开发；App 不知道 Provider 选择且不持有 AI Secret；服务端只发送 private Storage 下载并复核后的图片字节；Provider 输出仍按 `unknown` 处理，只有 `AIExtractionResultSchema` 校验成功的数据可以持久化。不得在本阶段增加第二个 Provider、自动 fallback 或任意模型名覆盖。

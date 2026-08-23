@@ -98,6 +98,14 @@ Provider 只能在 Edge Function/安全后端实现和调用。返回 `unknown` 
 
 当前 extraction schema version 为 `1`，包含：client candidate、project candidate、至少一个 requirement、suggested tasks、confidence 和 warnings。修改必填字段或语义时必须提升版本并保留兼容读取策略。
 
+服务端 Provider 配置合同：
+
+- `AI_PROVIDER=stub` 使用 `ConfiguredStubAIProvider` 和 `AI_PROVIDER_STUB_RESULT_JSON`。
+- `AI_PROVIDER=qwen` 使用固定模型 `qwen3-vl-plus`、华北 2（北京）endpoint 和 Supabase Secret `DASHSCOPE_API_KEY`。
+- 未配置、未知 Provider 或缺少相应 Secret 必须安全失败，不能自动切换到付费模型或第二个 Provider。
+- Provider 配置、模型名和 endpoint 不属于 App DTO，不能通过客户端请求覆盖。
+- Qwen JSON Object 只提供 JSON 语法约束；服务端仍必须解析为 `unknown` 并执行 `AIExtractionResultSchema.safeParse`。
+
 ## 8. 上传合同
 
 `PrepareUploadInput` 只接受 `mimeType`、`byteSize`、`originalFileName`。服务端验证后返回 `uploadId`、规范化 `storagePath` 和短时 `signedUploadToken`。原始文件名仅用于日志友好的元信息且需要清洗，不参与路径授权。
