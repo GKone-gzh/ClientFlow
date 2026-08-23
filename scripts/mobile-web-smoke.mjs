@@ -40,7 +40,13 @@ const commandArguments = isWindows
 const result = spawnSync(command, commandArguments, {
   cwd: workspaceRoot,
   encoding: "utf8",
-  env: { ...process.env, CI: "1" },
+  env: {
+    ...process.env,
+    CI: "1",
+    EXPO_PUBLIC_APP_ADAPTER: "supabase",
+    EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_build_smoke",
+    EXPO_PUBLIC_SUPABASE_URL: "https://build-smoke.supabase.co",
+  },
   stdio: "inherit",
 });
 

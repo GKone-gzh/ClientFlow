@@ -36,6 +36,7 @@ test("uses the complete Supabase intake composition without mock controls", () =
     composition.services.clients.constructor.name,
     "SupabaseClientRepository",
   );
+  assert.equal("controller" in composition.services.intake, false);
 });
 
 test("keeps controllable mock scenarios behind optional development tools", () => {

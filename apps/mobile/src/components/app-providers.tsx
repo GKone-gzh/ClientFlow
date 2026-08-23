@@ -7,7 +7,7 @@ import { queryClient } from "@/services/query-client";
 import { AppServiceProvider } from "@/services/app-service-provider";
 import { composeAppServices } from "@/services/compose-app-services";
 
-const environment = readAppEnvironment();
+const environment = readAppEnvironment(undefined, { isDevelopment: __DEV__ });
 const composition = composeAppServices({
   ...environment,
   enableDevelopmentTools: environment.adapter === "mock" && __DEV__,

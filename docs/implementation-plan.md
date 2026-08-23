@@ -47,14 +47,15 @@
 - Phase 2 P3 / Issue #5 已完成自动化、真实 Supabase、User A/B 隔离和 Android 真机全链路验收，最终文档已提交，Issue 已关闭。
 - Phase 2 P4 / Issue #6 已完成真实 Qwen、准确率/安全 fixtures、User A/B 隔离和 Android 真机验收；最终文档已提交，Issue 可关闭。
 - Phase 2.5 P1 / Issue #7 已建立，当前完成现状审计、Threat Model、SecureStore 迁移合同、数据库原子限流设计、usage 最小化和数据保留原则。
+- Native Session 已改用 SecureStore 版本化分块 adapter；首次读取会从 AsyncStorage 安全迁移并删除旧值，退出同时清理两侧。Web storage 保持独立。
+- Mock/Supabase composition 已拆分；Supabase production 路径不创建 Mock services 且始终不暴露 development tools。production 缺少 adapter 或选择 Mock 会 fail closed。
+- Public env 已拒绝 service-role、`sb_secret_`、AI Provider、DashScope 和 admin token 类配置；生产 Web smoke 显式验证 Supabase composition。
 
 ## 下一步
 
-1. 将 Native Session 从 AsyncStorage 迁移到支持大 Session 的 SecureStore adapter，并验证恢复、刷新和退出清理。
-2. 彻底分离 Mock/Supabase composition，加固 public env 与 development tools production guard。
-3. 以新 migration 实现数据库并发锁、滚动额度和 server-only AI usage，再接入 Edge service。
-4. 增加 request ID、安全日志、权限攻击测试和基础 Security CI。
-5. 部署并完成真实 Supabase、User A/B、额度、重复请求和 Android 真机全链路回归；全部通过后关闭 Issue #7。
+1. 以新 migration 实现数据库并发锁、滚动额度和 server-only AI usage，再接入 Edge service。
+2. 增加 request ID、安全日志、权限攻击测试和基础 Security CI。
+3. 部署并完成真实 Supabase、User A/B、额度、重复请求和 Android 真机全链路回归；全部通过后关闭 Issue #7。
 
 ## 环境限制
 

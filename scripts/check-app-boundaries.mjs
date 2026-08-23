@@ -55,6 +55,15 @@ for (const path of sourceFiles(mobileSource)) {
       `${normalizedPath}: a test double must not import the composition root or its provider. Depend on neutral service ports instead.`,
     );
   }
+
+  if (
+    normalizedPath === "services/compose-supabase-app-services.ts" &&
+    /from\s+["']@\/(?:mocks\/|[^"']*\/mock-)/.test(source)
+  ) {
+    violations.push(
+      `${normalizedPath}: the Supabase production composition must not import Mock implementations.`,
+    );
+  }
 }
 
 if (violations.length > 0) {
