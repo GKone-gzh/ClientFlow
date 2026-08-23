@@ -79,3 +79,11 @@
 - 决策：后续开发只从最新 `main` 开始，由单一负责人按 GitHub Issue 分阶段实现、验证、提交和集成；旧 backend/app 并行分支冻结，不再作为持续开发线。
 - 原因：基础架构、App 骨架和安全后端已经进入 `main`，继续维护平行实现会增加接口漂移、重复工作和合并风险。当前优先级是尽快跑通一个真实 MVP 闭环。
 - 后果：不推翻现有模块边界或公共合同；每个可运行阶段都必须独立测试、commit、普通 push，并回写对应 Issue。旧分支只保留历史证据，不 cherry-pick 未经重新审查的批量实现。
+
+## ADR-011：Edge Function 显式解析共享合同并由服务端验证用户 Token
+
+- 状态：Accepted
+- 日期：2026-08-23
+- 决策：`@clientflow/contracts` 内部相对模块使用显式 `.ts` 扩展，使同一源码可由 Expo/TypeScript 和 Supabase Deno bundler 解析。Edge Function 使用 server-only Supabase verifier 对 bearer token 执行 `auth.getUser(token)`，验证成功后才创建携带该用户 Authorization 的 RLS client。
+- 原因：远端 Deno bundler 不接受共享包的无扩展名相对导入；同时托管函数环境中的自动 public key 与当前项目用户 token 验证不一致。服务端已有 secret key，适合作为 Auth API 的可信调用凭据，但用户身份仍必须来自并绑定到已验证 token。
+- 后果：`allowImportingTsExtensions` 是 workspace 编译门禁；App 不获得任何 server key；无效 token 不创建用户 client；admin client 仅用于 token 验证、私有 Storage 和显式 owner 约束的数据操作，用户 RPC 继续携带已验证用户 Authorization 以执行 RLS。

@@ -21,6 +21,9 @@
 - 未登录/已登录路由守卫，以及恢复 Session 期间的 loading/error 门禁。
 - 可执行的真实 Supabase Auth smoke，覆盖注册、登录、持久化 Session 恢复和退出清除。
 - 真实 Supabase 远端 Auth、Expo Web 路由和 Android 设备重启/退出验收。
+- 可切换 Mock/Supabase Screenshot Upload Adapter，以及严格的 `prepare-upload -> signed private upload -> mark-uploaded` 边界。
+- 真实 Supabase private Storage smoke：对象存在、规范路径和 owner 匹配、状态为 `uploaded`、未签名 public URL 被拒绝。
+- Android 真机截图选择、压缩、上传和 `uploaded` 停止态验收；没有提前触发 AI extraction。
 
 ## 当前配置
 
@@ -29,23 +32,21 @@
 - 客户端只读取 `EXPO_PUBLIC_SUPABASE_URL` 和 `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`。
 - `EXPO_PUBLIC_*` 会进入客户端 bundle，禁止配置 service-role、`sb_secret_` 或 AI Secret。
 
-## 正在进行
+## 本阶段状态
 
-- Phase 2 P2 / Issue #4：实现可切换的真实 Supabase private Storage 截图上传 Adapter。
-- 本阶段仅推进到 `uploads.status = uploaded`，不调用 AI extraction。
-- 上传链路固定为 `prepare-upload -> signed private upload -> mark-uploaded`。
+- Phase 2 P2 / Issue #4 已完成验收，等待本阶段最终 commit、push 和 Issue 关闭。
+- 本阶段严格停止在 `uploads.status = uploaded`，未调用 AI extraction。
 
 ## 下一步
 
-1. 完成 Phase 2 P2 自动化测试和真实 Supabase Storage 验收。
-2. 下一轮经确认后将 Intake / AI Stub Extraction / 确认流程切换到真实 Supabase Adapter。
-3. 后续再切换 Client/Project/Requirement/Task Repository，并完成端到端用户 A/B 隔离验证。
+1. 下一轮经确认后进入 Phase 2 P3，将 Intake / AI Stub Extraction / 确认流程切换到真实 Supabase Adapter。
+2. 后续再切换 Client/Project/Requirement/Task Repository，并完成端到端用户 A/B 隔离验证。
 
 ## 环境限制
 
 - 真实 Supabase 公共配置和测试账号只存在于 Git 忽略的本地环境文件，不进入仓库或客户端 Secret。
 - 本机未安装 Supabase CLI、Docker、Android `adb` 或 emulator；PGlite migration/RLS 测试可运行，本阶段已通过局域网 Expo Go 完成 Android 实机验收。
-- Phase 2 P2 远端预检确认 `uploads` schema 可访问，但 `prepare-upload` 与 `mark-uploaded` 当前均返回 HTTP 404。代码与 smoke 已就绪；真实验收需先使用 Supabase Personal Access Token 部署这两个 Edge Functions，token 不得写入仓库。
+- npm 分发的 Supabase CLI `2.115.0` 在当前 Windows 环境缺少匹配 binary；本阶段使用官方 standalone CLI `2.114.0` 完成 `prepare-upload` 与 `mark-uploaded` 部署。Personal Access Token 仅存于 Git 忽略的本地文件。
 - iOS App Store 版 Expo Go 在 SDK 57 过渡期不兼容本项目；后续 iOS 原生验收应使用兼容的 Development Build/TestFlight，不降级项目 SDK。
 - 正式 Figma 尚未交付，App 保持基础 Placeholder UI。
 

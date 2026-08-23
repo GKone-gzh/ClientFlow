@@ -24,12 +24,6 @@ export function createRuntimeBackendFactory(
   getEnvironment: EnvironmentReader,
 ): BackendFactory {
   const supabaseUrl = requireEnvironment(getEnvironment, "SUPABASE_URL");
-  const publicKey = readApiKey(
-    getEnvironment,
-    ["SUPABASE_ANON_KEY", "SUPABASE_PUBLISHABLE_KEY"],
-    "SUPABASE_PUBLISHABLE_KEYS",
-    "Supabase publishable key",
-  );
   const serviceRoleKey = readApiKey(
     getEnvironment,
     ["SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_SECRET_KEY"],
@@ -37,8 +31,8 @@ export function createRuntimeBackendFactory(
     "Supabase server secret key",
   );
   const admin = createClient(supabaseUrl, serviceRoleKey, clientOptions());
-  const auth = new SupabaseAuthSessionAdapter((accessToken) =>
-    createClient(supabaseUrl, publicKey, {
+  const auth = new SupabaseAuthSessionAdapter(admin, (accessToken) =>
+    createClient(supabaseUrl, serviceRoleKey, {
       ...clientOptions(),
       global: { headers: { authorization: `Bearer ${accessToken}` } },
     }),

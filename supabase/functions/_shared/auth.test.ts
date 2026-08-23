@@ -8,7 +8,7 @@ import { BackendError } from "./errors";
 
 test("auth adapter rejects requests without constructing a Supabase client", async () => {
   let factoryCalls = 0;
-  const adapter = new SupabaseAuthSessionAdapter(() => {
+  const adapter = new SupabaseAuthSessionAdapter({} as SupabaseClient, () => {
     factoryCalls += 1;
     return {} as SupabaseClient;
   });
@@ -22,7 +22,7 @@ test("auth adapter rejects requests without constructing a Supabase client", asy
 
 test("auth adapter verifies the bearer token with Supabase Auth", async () => {
   let verifiedToken: string | undefined;
-  const client = {
+  const verifier = {
     auth: {
       getUser: async (token: string) => {
         verifiedToken = token;
@@ -33,7 +33,8 @@ test("auth adapter verifies the bearer token with Supabase Auth", async () => {
       },
     },
   } as unknown as SupabaseClient;
-  const adapter = new SupabaseAuthSessionAdapter(() => client);
+  const client = {} as SupabaseClient;
+  const adapter = new SupabaseAuthSessionAdapter(verifier, () => client);
   const request = new Request("https://example.test", {
     headers: { authorization: "Bearer verified-token" },
   });
@@ -43,4 +44,30 @@ test("auth adapter verifies the bearer token with Supabase Auth", async () => {
   assert.equal(verifiedToken, "verified-token");
   assert.equal(session.userId, "00000000-0000-4000-8000-000000000001");
   assert.equal(session.client, client);
+});
+
+test("auth adapter does not construct a user client for an invalid token", async () => {
+  let factoryCalls = 0;
+  const verifier = {
+    auth: {
+      getUser: async () => ({
+        data: { user: null },
+        error: { code: "bad_jwt" },
+      }),
+    },
+  } as unknown as SupabaseClient;
+  const adapter = new SupabaseAuthSessionAdapter(verifier, () => {
+    factoryCalls += 1;
+    return {} as SupabaseClient;
+  });
+
+  await assert.rejects(
+    adapter.requireSession(
+      new Request("https://example.test", {
+        headers: { authorization: "Bearer invalid-token" },
+      }),
+    ),
+    (error) => error instanceof BackendError && error.code === "unauthenticated",
+  );
+  assert.equal(factoryCalls, 0);
 });

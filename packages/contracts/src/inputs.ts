@@ -1,13 +1,13 @@
 import { z } from "zod";
 
-import { AIExtractionResultSchema } from "./ai-extraction";
-import type { EntityId, ISODate, ISODateTime, Upload } from "./models";
+import { AIExtractionResultSchema } from "./ai-extraction.ts";
+import type { EntityId, ISODate, ISODateTime, Upload } from "./models.ts";
 import {
   UploadStatusSchema,
   type ClientStatus,
   type ProjectStatus,
   type TaskStatus,
-} from "./statuses";
+} from "./statuses.ts";
 
 export const EntityIdSchema = z.string().uuid();
 

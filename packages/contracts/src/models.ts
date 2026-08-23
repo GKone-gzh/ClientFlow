@@ -1,11 +1,11 @@
-import type { AIExtractionResult } from "./ai-extraction";
+import type { AIExtractionResult } from "./ai-extraction.ts";
 import type {
   AIExtractionStatus,
   ClientStatus,
   ProjectStatus,
   TaskStatus,
   UploadStatus,
-} from "./statuses";
+} from "./statuses.ts";
 
 export type EntityId = string;
 export type ISODateTime = string;

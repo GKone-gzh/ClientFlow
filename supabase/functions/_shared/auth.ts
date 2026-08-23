@@ -10,6 +10,7 @@ export interface AuthenticatedSession {
 
 export class SupabaseAuthSessionAdapter {
   constructor(
+    private readonly verifier: SupabaseClient,
     private readonly createAuthenticatedClient: (
       accessToken: string,
     ) => SupabaseClient,
@@ -17,8 +18,7 @@ export class SupabaseAuthSessionAdapter {
 
   async requireSession(request: Request): Promise<AuthenticatedSession> {
     const accessToken = parseBearerToken(request.headers.get("authorization"));
-    const client = this.createAuthenticatedClient(accessToken);
-    const { data, error } = await client.auth.getUser(accessToken);
+    const { data, error } = await this.verifier.auth.getUser(accessToken);
 
     if (error !== null || data.user === null) {
       throw new BackendError({
@@ -29,7 +29,11 @@ export class SupabaseAuthSessionAdapter {
       });
     }
 
-    return { accessToken, client, userId: data.user.id };
+    return {
+      accessToken,
+      client: this.createAuthenticatedClient(accessToken),
+      userId: data.user.id,
+    };
   }
 }
 

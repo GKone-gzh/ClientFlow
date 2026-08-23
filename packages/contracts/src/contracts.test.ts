@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { AIExtractionResultSchema } from "./ai-extraction";
+import { AIExtractionResultSchema } from "./ai-extraction.ts";
 import {
   ConfirmExtractionInputSchema,
   GetExtractionInputSchema,
@@ -10,14 +10,14 @@ import {
   PrepareUploadResultSchema,
   RequestExtractionInputSchema,
   UploadSchema,
-} from "./inputs";
+} from "./inputs.ts";
 import {
   AI_EXTRACTION_STATUSES,
   CLIENT_STATUSES,
   PROJECT_STATUSES,
   TASK_STATUSES,
   UPLOAD_STATUSES,
-} from "./statuses";
+} from "./statuses.ts";
 
 const validExtraction = {
   schemaVersion: 1,

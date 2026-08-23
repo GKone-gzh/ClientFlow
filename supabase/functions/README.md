@@ -24,12 +24,10 @@ to the confirmation endpoint.
 ## Server environment
 
 - `SUPABASE_URL`: Supabase project URL. Supplied automatically when deployed.
-- `SUPABASE_ANON_KEY`, `SUPABASE_PUBLISHABLE_KEY`, or the default entry in
-  `SUPABASE_PUBLISHABLE_KEYS`: used to verify the user session and create the
-  RLS-bound client.
 - `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_SECRET_KEY`, or the default entry in
-  `SUPABASE_SECRET_KEYS`: server-only key for private Storage and ingestion
-  metadata. Never expose it to the App.
+  `SUPABASE_SECRET_KEYS`: server-only key used to verify user tokens, create an
+  RLS-bound client carrying the verified user's Authorization, and access
+  private Storage/ingestion metadata. Never expose it to the App.
 - `AI_PROVIDER_STUB_RESULT_JSON`: server-only JSON returned by the Phase 1 AI
   stub. It must pass `AIExtractionResultSchema`; invalid or absent values fail
   extraction without storing the raw value.

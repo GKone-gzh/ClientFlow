@@ -1,4 +1,4 @@
-import type { AIExtractionResult } from "./ai-extraction";
+import type { AIExtractionResult } from "./ai-extraction.ts";
 import type {
   ConfirmExtractionInput,
   ConfirmExtractionResult,
@@ -8,7 +8,7 @@ import type {
   PrepareUploadResult,
   UpdateClientInput,
   UpdateProjectInput,
-} from "./inputs";
+} from "./inputs.ts";
 import type {
   AIExtraction,
   Client,
@@ -17,7 +17,7 @@ import type {
   Requirement,
   Task,
   Upload,
-} from "./models";
+} from "./models.ts";
 
 export interface ClientRepository {
   list(): Promise<Client[]>;

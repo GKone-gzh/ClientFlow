@@ -41,3 +41,11 @@ pnpm smoke:storage
 - 超过 10 MiB 或不支持的 MIME 在上传前失败。
 - `prepare-upload`、Storage 或 `mark-uploaded` 任一步失败时，页面不得显示上传完成。
 - App 日志、Issue 和测试输出不得包含图片内容、用户 token、signed upload token 或 secret/service-role key。
+
+## 6. 2026-08-23 验收记录
+
+- `prepare-upload` 与 `mark-uploaded` 已部署到真实 Supabase 项目；未部署 AI 相关函数。
+- `pnpm smoke:storage` 使用真实测试账号和 JPEG 截图通过：293,316 bytes，owner 与当前 Session 匹配，路径为服务端规范路径，记录状态为 `uploaded`。
+- smoke 通过 `mark-uploaded` 的服务端对象下载验证确认对象存在、大小和 MIME 正确；未签名 public URL 访问被拒绝，bucket 保持 private。
+- Android Expo Go 真机通过：选择截图、压缩、上传并显示“截图已安全上传”；流程没有进入 AI 识别。
+- 本地环境文件、Personal Access Token、测试账号密码和所有 Session/signed token 均未提交或写入 Issue。
