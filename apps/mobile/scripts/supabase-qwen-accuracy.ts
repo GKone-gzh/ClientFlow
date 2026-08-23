@@ -150,7 +150,12 @@ function matchesCaseExpectation(
   if (caseName === "multiple_requirements") {
     return result.requirements.length >= 2;
   }
-  return result.warnings.length > 0;
+  const serializedResult = JSON.stringify(result);
+  return (
+    result.warnings.length > 0 &&
+    result.suggestedTasks.length === 0 &&
+    !/忽略.{0,8}指令|系统\s*prompt|api\s*key/i.test(serializedResult)
+  );
 }
 
 async function uploadAndExtract(
