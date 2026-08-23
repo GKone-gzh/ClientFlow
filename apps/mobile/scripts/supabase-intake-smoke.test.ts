@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   IntakeSmokeError,
   requireIsolationCredentials,
+  requireExpectedProvider,
 } from "./supabase-intake-smoke";
 
 test("Intake smoke requires a distinct second-account credential pair", () => {
@@ -20,5 +21,16 @@ test("Intake smoke requires a distinct second-account credential pair", () => {
       error instanceof IntakeSmokeError &&
       error.code === "missing_configuration" &&
       !error.message.includes("password-b"),
+  );
+});
+
+test("Intake smoke defaults to Stub and accepts only approved providers", () => {
+  assert.equal(requireExpectedProvider(undefined), "stub");
+  assert.equal(requireExpectedProvider(" QWEN "), "qwen");
+  assert.throws(
+    () => requireExpectedProvider("unapproved-provider"),
+    (error) =>
+      error instanceof IntakeSmokeError &&
+      error.code === "invalid_expected_provider",
   );
 });

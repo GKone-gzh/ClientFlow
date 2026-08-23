@@ -41,6 +41,8 @@
     "lint": "expo lint",
     "smoke:auth": "tsx scripts/supabase-auth-smoke.ts",
     "smoke:intake": "tsx scripts/supabase-intake-smoke.ts",
+    "smoke:qwen": "tsx scripts/supabase-qwen-smoke.ts",
+    "smoke:qwen:accuracy": "tsx scripts/supabase-qwen-accuracy.ts",
     "smoke:storage": "tsx scripts/supabase-storage-smoke.ts",
     "test": "tsx --test src/**/*.test.ts scripts/**/*.test.ts",
     "typecheck": "tsc --noEmit"

@@ -15,13 +15,15 @@ import { createSupabaseBusinessRepositories } from "../src/services/supabase/sup
 import { SupabaseIntakeAdapter } from "../src/services/supabase/supabase-intake-adapter";
 import { createSupabaseUploadAdapter } from "../src/services/supabase/supabase-upload-adapter";
 import { imageMimeType } from "./supabase-storage-smoke";
+import { loadSmokeEnvironment } from "./smoke-env";
 
-interface IntakeSmokeEnvironment {
+export interface IntakeSmokeEnvironment {
   CLIENTFLOW_AUTH_TEST_EMAIL?: string;
   CLIENTFLOW_AUTH_TEST_EMAIL_B?: string;
   CLIENTFLOW_AUTH_TEST_PASSWORD?: string;
   CLIENTFLOW_AUTH_TEST_PASSWORD_B?: string;
   CLIENTFLOW_STORAGE_TEST_IMAGE?: string;
+  CLIENTFLOW_EXPECTED_AI_PROVIDER?: string;
   EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY?: string;
   EXPO_PUBLIC_SUPABASE_URL?: string;
 }
@@ -49,7 +51,21 @@ export function requireIsolationCredentials(source: IntakeSmokeEnvironment) {
   };
 }
 
+export function requireExpectedProvider(value: string | undefined) {
+  const provider = value?.trim().toLowerCase() || "stub";
+  if (provider !== "stub" && provider !== "qwen") {
+    throw new IntakeSmokeError(
+      "invalid_expected_provider",
+      "Expected AI provider must be stub or qwen.",
+    );
+  }
+  return provider;
+}
+
 export async function runSupabaseIntakeSmoke(source: IntakeSmokeEnvironment) {
+  const expectedProvider = requireExpectedProvider(
+    source.CLIENTFLOW_EXPECTED_AI_PROVIDER,
+  );
   const environment = readAppEnvironment({
     appAdapter: "supabase",
     supabasePublishableKey: source.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
@@ -132,14 +148,21 @@ export async function runSupabaseIntakeSmoke(source: IntakeSmokeEnvironment) {
       "The real upload was not confirmed for user A.",
     );
 
+    const extractionStartedAt = performance.now();
     const extraction = await intake.requestExtraction(prepared.uploadId);
+    const extractionDurationMs = Math.round(
+      performance.now() - extractionStartedAt,
+    );
+    const expectedModel =
+      expectedProvider === "qwen" ? "qwen3-vl-plus" : "configured-result-v1";
     requireCondition(
       extraction.uploadId === prepared.uploadId &&
         extraction.userId === signedInA.user.id &&
         extraction.status === "needs_review" &&
-        extraction.provider === "stub",
+        extraction.provider === expectedProvider &&
+        extraction.model === expectedModel,
       "extraction_not_ready",
-      "The server Stub extraction did not reach needs_review.",
+      "The expected server extraction did not reach needs_review.",
     );
     const reviewResult = await intake.getValidatedResult(extraction.id);
     const validatedReview = AIExtractionResultSchema.safeParse(reviewResult);
@@ -201,11 +224,13 @@ export async function runSupabaseIntakeSmoke(source: IntakeSmokeEnvironment) {
     });
 
     return {
-      aiProvider: "stub",
+      aiModel: expectedModel,
+      aiProvider: expectedProvider,
       clientDetailRead: true,
       confirmed: true,
       crossUserRejected: true,
       idempotent: true,
+      extractionDurationMs,
       projectCount: detail.projects.length,
       requirementCount: firstConfirmation.requirementIds.length,
       status: "passed",
@@ -334,6 +359,7 @@ function requireValue(value: string | undefined, variable: string) {
 }
 
 async function main() {
+  loadSmokeEnvironment([".env.local", ".env.intake-smoke.local"]);
   try {
     const result = await runSupabaseIntakeSmoke({
       CLIENTFLOW_AUTH_TEST_EMAIL: process.env.CLIENTFLOW_AUTH_TEST_EMAIL,
@@ -341,6 +367,8 @@ async function main() {
       CLIENTFLOW_AUTH_TEST_PASSWORD: process.env.CLIENTFLOW_AUTH_TEST_PASSWORD,
       CLIENTFLOW_AUTH_TEST_PASSWORD_B: process.env.CLIENTFLOW_AUTH_TEST_PASSWORD_B,
       CLIENTFLOW_STORAGE_TEST_IMAGE: process.env.CLIENTFLOW_STORAGE_TEST_IMAGE,
+      CLIENTFLOW_EXPECTED_AI_PROVIDER:
+        process.env.CLIENTFLOW_EXPECTED_AI_PROVIDER,
       EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY:
         process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
       EXPO_PUBLIC_SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL,
