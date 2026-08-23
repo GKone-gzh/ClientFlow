@@ -11,6 +11,7 @@ async function main() {
     ".env.local",
     ".env.auth-smoke.local",
     ".env.intake-smoke.local",
+    ".env.qwen-smoke.local",
   ]);
   try {
     const result = await runSupabaseIntakeSmoke({
@@ -20,7 +21,10 @@ async function main() {
       CLIENTFLOW_AUTH_TEST_PASSWORD_B:
         process.env.CLIENTFLOW_AUTH_TEST_PASSWORD_B,
       CLIENTFLOW_EXPECTED_AI_PROVIDER: "qwen",
-      CLIENTFLOW_STORAGE_TEST_IMAGE: process.env.CLIENTFLOW_STORAGE_TEST_IMAGE,
+      CLIENTFLOW_STORAGE_TEST_IMAGE: resolveQwenSmokeImage(
+        process.env.CLIENTFLOW_STORAGE_TEST_IMAGE,
+        process.env.CLIENTFLOW_AI_TEST_IMAGE_COMPLETE,
+      ),
       EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY:
         process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
       EXPO_PUBLIC_SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL,
@@ -44,6 +48,13 @@ async function main() {
     );
     process.exitCode = 1;
   }
+}
+
+export function resolveQwenSmokeImage(
+  storageImage: string | undefined,
+  completeAccuracyImage: string | undefined,
+): string | undefined {
+  return storageImage?.trim() || completeAccuracyImage?.trim() || undefined;
 }
 
 const entryPoint = process.argv[1] ? pathToFileURL(process.argv[1]).href : null;
