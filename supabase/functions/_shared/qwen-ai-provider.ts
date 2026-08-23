@@ -56,12 +56,17 @@ Extraction rules:
 - Return one JSON object matching the supplied JSON Schema exactly. Do not use markdown.
 - Preserve the meaning of explicit customer statements. Do not invent names, handles, phone numbers, amounts, currencies, dates, addresses, scope, or deadlines.
 - Use null for unknown nullable values and add a concise warning for important missing or conflicting information.
-- The schema requires client.name and project.name. If either is not visible, use the literal placeholder "待确认客户" or "待确认项目" and add a warning; placeholders are not facts.
-- Include only explicit requirements. If no reliable requirement is visible, use one "需求待人工确认" placeholder and add a warning.
-- Generate a small number of practical suggested tasks only from explicit requirements. Do not over-split work.
+- A non-generic person or business name shown as the chat title can be used as client.name. Generic titles such as "项目咨询", "项目沟通", or "聊天" are not client names.
+- The schema requires client.name and project.name. If client.name is not visible, use the literal placeholder "待确认客户" and add a warning; the placeholder is not a fact.
+- If no formal project title is visible, project.name may be a concise phrase copied from the explicit requested deliverable, such as "咖啡店品牌网站". If even the deliverable is unclear, use "待确认项目" and add a warning.
+- Include only explicit deliverables, features, scope, or quality constraints as requirements. Split independently actionable items into separate requirements without duplicating them.
+- Do not put client identity, contact details, budget, currency, dates, scheduling uncertainty, or general conversation status into requirements; those belong in their dedicated fields or warnings.
+- If no reliable requirement is visible, use one "需求待人工确认" placeholder and add a warning.
+- Generate a small number of practical suggested tasks only for actionable explicit requirements. Do not create tasks for missing names, uncertain budgets, uncertain dates, warnings, or placeholder requirements. Do not over-split work.
 - Use ISO YYYY-MM-DD only when an absolute date is explicit. Do not infer relative dates without an unambiguous reference date.
 - Use a three-letter uppercase currency code only when the currency is explicit.
 - confidence must reflect screenshot readability and extraction certainty, not optimism.
+- Every warning must accurately describe the returned JSON. Do not claim that a value was inferred when the corresponding returned field is null.
 
 Required JSON Schema:
 ${extractionJsonSchema}`;
