@@ -93,19 +93,6 @@ export class SupabaseIntakeService implements IntakeService {
     }
 
     const safeResult = normalizeUntrustedInstructionOutput(validated.data);
-    if (safeResult === null) {
-      await this.recordFailure(
-        uploadId,
-        extraction.id,
-        "unsafe_provider_output",
-      );
-      throw new BackendError({
-        code: "extraction_failed",
-        message: "The AI provider returned an unsafe extraction",
-        retryable: false,
-        status: 502,
-      });
-    }
 
     const completed = await this.extractions.complete(
       extraction.id,
@@ -193,10 +180,28 @@ const SUSPICIOUS_OUTPUT_PATTERNS = [
 
 function normalizeUntrustedInstructionOutput(
   result: AIExtractionResult,
-): AIExtractionResult | null {
+): AIExtractionResult {
   const { warnings, ...businessResult } = result;
   if (containsSuspiciousOutput(JSON.stringify(businessResult))) {
-    return null;
+    return AIExtractionResultSchema.parse({
+      schemaVersion: 1,
+      client: {
+        name: "待确认客户",
+        contactHandle: null,
+        contactChannel: null,
+      },
+      project: {
+        name: "待确认项目",
+        summary: null,
+        budgetAmount: null,
+        budgetCurrency: null,
+        dueDate: null,
+      },
+      requirements: [{ content: "需求待人工确认", sortOrder: 0 }],
+      suggestedTasks: [],
+      confidence: Math.min(result.confidence, 0.1),
+      warnings: [SAFE_INSTRUCTION_WARNING],
+    });
   }
 
   let replacedWarning = false;
