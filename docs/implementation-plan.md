@@ -4,7 +4,7 @@
 
 ## 当前 Phase
 
-**Phase 2 P4：接入首个真实视觉 AI Provider**
+**Phase 2 P4：接入首个真实视觉 AI Provider（已完成）**
 
 唯一目标是保持现有真实主链路和 Stub 测试能力，同时增加 server-only `qwen3-vl-plus`，使真实聊天截图经 private Storage、Qwen、Zod 校验进入 `needs_review`，并继续完成确认和真实客户详情读取。
 
@@ -29,31 +29,35 @@
 - Supabase Client/Project/Requirement/Task Repository 已提供主链路所需真实读写，Client Detail 读取真实实体图。
 - 真实 Supabase Intake smoke 已验证确认幂等和 User A/B 对 upload、extraction、client、project、requirement、task 的隔离。
 - Android 真机完整 Intake、Review、确认、跳转和真实客户详情验收通过。
+- 项目所有者选择的 `qwen3-vl-plus` 已作为 server-only Provider 接入，Stub 模式继续保留。
+- 真实 Qwen smoke、5 组准确率/安全 fixtures、提示注入降级和 Android 真机 Review/编辑/确认验收通过。
+- AI 输出在持久化前依次经过公共 Zod Schema、注入输出门禁和元指令降级门禁。
 
 ## 当前配置
 
 - 默认 `EXPO_PUBLIC_APP_ADAPTER=mock`，用于离线开发和自动化测试。
-- 设置 `EXPO_PUBLIC_APP_ADAPTER=supabase` 后，Auth、截图上传、Intake Edge Functions 和业务 Repository 使用真实 Supabase；AI Provider 仍是仅运行在服务端的 Stub。
+- 设置 `EXPO_PUBLIC_APP_ADAPTER=supabase` 后，Auth、截图上传、Intake Edge Functions 和业务 Repository 使用真实 Supabase；AI Provider 由服务端 `AI_PROVIDER=stub|qwen` 选择，App 不参与选择。
 - 客户端只读取 `EXPO_PUBLIC_SUPABASE_URL` 和 `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`。
 - `EXPO_PUBLIC_*` 会进入客户端 bundle，禁止配置 service-role、`sb_secret_` 或 AI Secret。
+- 真实 Provider 的 `DASHSCOPE_API_KEY` 仅存在于 Supabase server secrets。
 
 ## 本阶段状态
 
 - Phase 2 P2 / Issue #4 已完成自动化、真实 Supabase 和 Android 真机验收，代码已 push 到 `main`，Issue 已关闭。
 - Phase 2 P3 / Issue #5 已完成自动化、真实 Supabase、User A/B 隔离和 Android 真机全链路验收，最终文档已提交，Issue 已关闭。
-- Phase 2 P4 / Issue #6 已开始；项目所有者已选择阿里云百炼 `qwen3-vl-plus`，正在实现真实 Provider Adapter、成本/超时保护和安全测试。
+- Phase 2 P4 / Issue #6 已完成真实 Qwen、准确率/安全 fixtures、User A/B 隔离和 Android 真机验收；最终文档已提交，Issue 可关闭。
 
 ## 下一步
 
-1. 先完成 `AI_PROVIDER=stub|qwen` 服务端切换、Qwen HTTP Adapter、稳定错误映射、超时、有限重试和安全日志测试。
-2. 配置 `DASHSCOPE_API_KEY` Supabase Secret 后执行真实 Provider smoke、少量准确率验收和 Android 真机闭环。
-3. Issue #6 完成后立即停止，不开始第二个 Provider、正式 UI、支付、订阅或额外 CRM。
+1. P4 完成后立即停止，不开始第二个 Provider、支付、订阅或额外 CRM。
+2. 下一阶段由项目所有者重新确定优先级；正式 Figma 交付前继续保持功能优先 Placeholder UI。
+3. 商业化前应独立规划服务端 AI 用量计量、预算告警和数据保留策略，但不在 P4 范围内提前实现。
 
 ## 环境限制
 
 - 真实 Supabase 公共配置和测试账号只存在于 Git 忽略的本地环境文件，不进入仓库或客户端 Secret。
-- 本机未安装 Supabase CLI、Docker、Android `adb` 或 emulator；PGlite migration/RLS 测试可运行，本阶段已通过局域网 Expo Go 完成 Android 实机验收。
-- npm 分发的 Supabase CLI `2.115.0` 在当前 Windows 环境缺少匹配 binary；本阶段使用官方 standalone CLI `2.114.0` 完成 `prepare-upload` 与 `mark-uploaded` 部署。Personal Access Token 仅存于 Git 忽略的本地文件。
+- 本机无 Docker、Android `adb` 或 emulator；PGlite migration/RLS 测试可运行，本阶段已通过局域网 Expo Go 完成 Android 实机验收。
+- npm 分发的 Supabase CLI `2.115.0` 在当前 Windows 环境缺少匹配 binary；本阶段使用官方 standalone CLI `2.114.0` 完成 Edge Function 部署。Personal Access Token 仅存于 Git 忽略的本地文件。
 - iOS App Store 版 Expo Go 在 SDK 57 过渡期不兼容本项目；后续 iOS 原生验收应使用兼容的 Development Build/TestFlight，不降级项目 SDK。
 - 正式 Figma 尚未交付，App 保持基础 Placeholder UI。
 
