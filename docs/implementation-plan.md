@@ -1,14 +1,14 @@
 # ClientFlow Implementation Plan
 
-最后更新：2026-08-23
+最后更新：2026-08-24
 
 ## 当前 Phase
 
-**Phase 2 P4：接入首个真实视觉 AI Provider（已完成）**
+**Phase 2.5 P1 / Issue #7：Production Security & Abuse Hardening（进行中）**
 
-唯一目标是保持现有真实主链路和 Stub 测试能力，同时增加 server-only `qwen3-vl-plus`，使真实聊天截图经 private Storage、Qwen、Zod 校验进入 `needs_review`，并继续完成确认和真实客户详情读取。
+唯一目标是在不增加业务功能的前提下，加固 Native Session、AI 防刷/并发/额度、usage、日志、生产组合边界、数据库权限和基础安全 CI。
 
-第二个 AI Provider、自动模型路由、正式 Figma UI、支付订阅和额外 CRM 功能不在当前范围。
+第二个 AI Provider、自动模型路由、正式 Figma UI、支付订阅、性能重构和额外 CRM 功能不在当前范围。
 
 ## 已完成
 
@@ -46,12 +46,15 @@
 - Phase 2 P2 / Issue #4 已完成自动化、真实 Supabase 和 Android 真机验收，代码已 push 到 `main`，Issue 已关闭。
 - Phase 2 P3 / Issue #5 已完成自动化、真实 Supabase、User A/B 隔离和 Android 真机全链路验收，最终文档已提交，Issue 已关闭。
 - Phase 2 P4 / Issue #6 已完成真实 Qwen、准确率/安全 fixtures、User A/B 隔离和 Android 真机验收；最终文档已提交，Issue 可关闭。
+- Phase 2.5 P1 / Issue #7 已建立，当前完成现状审计、Threat Model、SecureStore 迁移合同、数据库原子限流设计、usage 最小化和数据保留原则。
 
 ## 下一步
 
-1. P4 完成后立即停止，不开始第二个 Provider、支付、订阅或额外 CRM。
-2. 下一阶段由项目所有者重新确定优先级；正式 Figma 交付前继续保持功能优先 Placeholder UI。
-3. 商业化前应独立规划服务端 AI 用量计量、预算告警和数据保留策略，但不在 P4 范围内提前实现。
+1. 将 Native Session 从 AsyncStorage 迁移到支持大 Session 的 SecureStore adapter，并验证恢复、刷新和退出清理。
+2. 彻底分离 Mock/Supabase composition，加固 public env 与 development tools production guard。
+3. 以新 migration 实现数据库并发锁、滚动额度和 server-only AI usage，再接入 Edge service。
+4. 增加 request ID、安全日志、权限攻击测试和基础 Security CI。
+5. 部署并完成真实 Supabase、User A/B、额度、重复请求和 Android 真机全链路回归；全部通过后关闭 Issue #7。
 
 ## 环境限制
 

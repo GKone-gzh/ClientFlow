@@ -95,3 +95,11 @@
 - 决策：由项目所有者明确选择阿里云百炼 `qwen3-vl-plus` 作为首个且唯一的真实视觉模型。运行时通过 server-only `AI_PROVIDER=stub|qwen` 切换；`qwen` 使用华北 2（北京）OpenAI-compatible endpoint 和 `DASHSCOPE_API_KEY`，模型名固定为 `qwen3-vl-plus`。
 - 原因：当前任务需要中文聊天截图理解、图片输入和结构化 JSON 输出；Qwen3-VL-Plus 官方支持这些能力。使用非思考模式和 JSON Object 约束可减少输出解析失败，但不能替代服务端 Zod 校验。
 - 后果：`ConfiguredStubAIProvider` 继续用于自动化测试和本地开发；App 不知道 Provider 选择且不持有 AI Secret；服务端只发送 private Storage 下载并复核后的图片字节；Provider 输出仍按 `unknown` 处理，只有 `AIExtractionResultSchema` 校验成功的数据可以持久化。不得在本阶段增加第二个 Provider、自动 fallback 或任意模型名覆盖。
+
+## ADR-013：Native SecureStore 与数据库原子 AI 用量门禁
+
+- 状态：Accepted
+- 日期：2026-08-24
+- 决策：Android/iOS Supabase Session 使用系统安全凭据存储，并以版本化分块 adapter 兼容大 Session；Web 保持平台独立 storage。AI 限流不使用 Edge 内存，而由 Postgres 在 Provider 调用前以用户级事务锁、usage 预约、同 upload 唯一约束和集中额度配置原子裁决。
+- 原因：移动端普通 AsyncStorage 不适合保存 refresh token；Edge Function 可水平扩展，进程内 rate limit 无法阻止并发绕过。同一请求在 Provider 成功后写库失败时也必须保守避免自动二次计费。
+- 后果：迁移完成后 Native AsyncStorage 不再保存 Auth Session；每用户默认并发 1，滚动 1 分钟/1 小时/24 小时额度为 5/30/100；所有已接受请求都先建立 server-only usage 记录。Supabase production composition 不初始化 Mock services，日志只使用安全字段白名单和 request ID。完整威胁模型见 `docs/threat-model.md`。

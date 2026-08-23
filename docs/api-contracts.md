@@ -42,6 +42,7 @@ interface AuthService {
 
 - `AuthSession` 只向 UI 暴露路由需要的用户标识和邮箱，不暴露 refresh token。
 - Supabase Adapter 必须持久化 Session，并在原生 App 前后台切换时启停 token refresh。
+- Native Supabase Adapter 使用系统安全凭据存储；历史 AsyncStorage Session 只允许一次性迁移，迁移或退出后必须删除旧值。Web 使用独立 Web storage adapter。
 - Mock Adapter 必须实现相同端口，用于无后端测试和开发。
 - 客户端配置只允许 Supabase URL 与 anon/publishable key；service-role、`sb_secret_` 和 AI Secret 禁止进入 `EXPO_PUBLIC_*`。
 - 注册启用邮件确认时可以返回用户但不返回 Session；UI 必须留在认证区并提示检查邮箱。
@@ -125,7 +126,16 @@ interface ContractErrorShape {
 }
 ```
 
-稳定 code：`unauthenticated`、`forbidden`、`not_found`、`validation_failed`、`conflict`、`upload_failed`、`extraction_failed`、`rate_limited`、`internal_error`。UI 根据 code/retryable 决定行为，不解析 message 文本。服务端日志可保存内部 correlation ID，但不能将 Secret、SQL 或 Provider 原始错误直接返回客户端。
+稳定 code：`unauthenticated`、`forbidden`、`not_found`、`validation_failed`、`conflict`、`upload_failed`、`extraction_failed`、`rate_limited`、`quota_exceeded`、`internal_error`。UI 根据 code/retryable 决定行为，不解析 message 文本。`rate_limited` 表示短时间窗限制，`quota_exceeded` 表示滚动 24 小时技术额度耗尽。错误 `details.requestId` 可返回安全 correlation ID，但不能将 Secret、SQL、stack trace 或 Provider 原始错误返回客户端。
+
+`request-extraction` 的幂等与额度语义：
+
+- owner 只取自验证后的 Session，输入只接受 `uploadId`。
+- 同一 user/upload 的顺序重试返回已有 extraction，`needs_review` 或 `confirmed` 不再次调用 Provider。
+- 同一 upload 已处于 `processing` 时安全返回或拒绝，不自动再次付费调用。
+- 每用户同时最多一个有效 extraction；滚动 1 分钟/1 小时/24 小时默认额度分别为 5/30/100。
+- 数据库必须在 Provider 调用前原子完成额度检查、processing 状态与 usage 预约。
+- Edge 响应携带 `x-request-id`；若客户端提供的 ID 不符合安全格式，服务端重新生成。
 
 ## 10. 建议路由命名
 

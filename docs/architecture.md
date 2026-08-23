@@ -93,6 +93,9 @@ MVP 不持久化未通过校验的完整 Provider raw output，也不在日志�
 - 输入文件大小和 MIME 类型限制。
 - 日志脱敏，不记录截图内容、完整模型输出或认证令牌。
 - 用户确认前不创建正式 Client/Project/Task 数据。
+- Provider 调用前由数据库原子检查用户级并发与滚动时间窗额度，不能使用 Edge Function 进程内计数。
+- 同一 upload 只能对应一个权威 extraction；一旦进入 `processing` 且无法证明 Provider 未调用，不得自动再次发起付费请求。
+- 每次已接受调用保存不含用户内容的 usage 元数据，供防刷和成本控制使用。
 
 首个真实实现由项目所有者选择阿里云百炼 `qwen3-vl-plus`。服务端以非思考模式请求 JSON Object，并继续把返回内容视为不可信 `unknown`。`AI_PROVIDER=stub|qwen` 是 Edge Function 的 server-only 运行时开关；Qwen API Key 只能配置为 Supabase Secret `DASHSCOPE_API_KEY`。客户端不能选择 Provider、模型、endpoint 或请求参数。
 
@@ -101,6 +104,8 @@ MVP 不持久化未通过校验的完整 Provider raw output，也不在日志�
 客户端 Repository 实现可封装 Supabase SDK，但调用者只依赖 `@clientflow/contracts` 中的接口。服务端负责授权、归属、状态转换和事务；客户端负责输入、呈现和交互状态。
 
 Mock Repository 仅用于 App 独立开发，必须实现相同公共接口。Mock 数据不能定义第二套 DTO 或状态。接入真实后端时应替换实现，而不是改页面业务合同。
+
+Supabase production composition 与 Mock composition 必须在创建阶段分离。Supabase 路径不得初始化 Mock Repository、Mock AI scenario 或 development tools；`developmentTools` 在 Supabase 模式始终为 `null`。Native Auth Session 使用平台安全凭据存储，Web 使用独立 Web storage adapter，二者保持相同 Supabase storage 接口。
 
 ## 7. 状态转换
 
@@ -115,3 +120,11 @@ Mock Repository 仅用于 App 独立开发，必须实现相同公共接口。Mo
 ## 8. 集成门禁
 
 每个功能分支在提交前至少运行对应的 TypeScript、Lint、Unit Test，并报告 App 启动或 Migration/RLS 测试结果。主架构窗口在合并前检查公共合同、依赖方向、安全隔离、重复逻辑、测试和迁移可逆性。
+
+## 9. 生产安全边界
+
+- 所有高价值 Edge Function 必须验证 Supabase Session；CORS 不是身份验证或授权边界。
+- Request correlation ID 只接受安全格式，否则由服务端生成；响应和结构化日志使用同一 ID。
+- 日志采用字段白名单，不序列化请求 headers/body、Provider raw response、SDK error 或 Secret。
+- Public env 只能包含明确允许的 Supabase public configuration 与 App adapter selector；疑似 service-role、AI Secret 或 admin token 必须在构建前失败。
+- 详细攻击面、额度规则和数据保留原则见 `docs/threat-model.md`。
