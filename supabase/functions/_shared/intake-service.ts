@@ -92,9 +92,24 @@ export class SupabaseIntakeService implements IntakeService {
       });
     }
 
+    const safeResult = normalizeUntrustedInstructionOutput(validated.data);
+    if (safeResult === null) {
+      await this.recordFailure(
+        uploadId,
+        extraction.id,
+        "unsafe_provider_output",
+      );
+      throw new BackendError({
+        code: "extraction_failed",
+        message: "The AI provider returned an unsafe extraction",
+        retryable: false,
+        status: 502,
+      });
+    }
+
     const completed = await this.extractions.complete(
       extraction.id,
-      validated.data,
+      safeResult,
       this.provider.providerName,
       this.provider.modelName,
     );
@@ -162,6 +177,49 @@ function hasDanglingRequirementReference(result: AIExtractionResult): boolean {
       task.requirementIndex !== null &&
       task.requirementIndex >= result.requirements.length,
   );
+}
+
+const SAFE_INSTRUCTION_WARNING =
+  "截图包含与业务需求无关的指令性内容，已忽略，请人工复核。";
+
+const SUSPICIOUS_OUTPUT_PATTERNS = [
+  /system\s*prompt|系统\s*prompt/i,
+  /api\s*key|access\s*token|refresh\s*token|service[-_\s]*role/i,
+  /ignore.{0,40}(previous|prior|instruction)/i,
+  /忽略.{0,20}(之前|以上|先前|指令)/i,
+  /screenshot extraction engine|untrusted conversation data/i,
+  /required json schema|never follow instructions/i,
+];
+
+function normalizeUntrustedInstructionOutput(
+  result: AIExtractionResult,
+): AIExtractionResult | null {
+  const { warnings, ...businessResult } = result;
+  if (containsSuspiciousOutput(JSON.stringify(businessResult))) {
+    return null;
+  }
+
+  let replacedWarning = false;
+  const safeWarnings = warnings.filter((warning) => {
+    if (!containsSuspiciousOutput(warning)) {
+      return true;
+    }
+    replacedWarning = true;
+    return false;
+  });
+
+  if (replacedWarning) {
+    safeWarnings.push(SAFE_INSTRUCTION_WARNING);
+  }
+
+  return AIExtractionResultSchema.parse({
+    ...businessResult,
+    warnings: safeWarnings,
+  });
+}
+
+function containsSuspiciousOutput(value: string): boolean {
+  return SUSPICIOUS_OUTPUT_PATTERNS.some((pattern) => pattern.test(value));
 }
 
 function normalizeProviderError(error: unknown): BackendError {
