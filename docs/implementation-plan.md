@@ -40,7 +40,7 @@
 ## 本阶段状态
 
 - Phase 2 P2 / Issue #4 已完成自动化、真实 Supabase 和 Android 真机验收，代码已 push 到 `main`，Issue 已关闭。
-- Phase 2 P3 / Issue #5 已完成自动化、真实 Supabase、User A/B 隔离和 Android 真机全链路验收，等待最终文档提交与 Issue 关闭。
+- Phase 2 P3 / Issue #5 已完成自动化、真实 Supabase、User A/B 隔离和 Android 真机全链路验收，最终文档已提交，Issue 已关闭。
 
 ## 下一步
 
