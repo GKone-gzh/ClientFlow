@@ -34,7 +34,7 @@
 
 ## 本阶段状态
 
-- Phase 2 P2 / Issue #4 已完成验收，等待本阶段最终 commit、push 和 Issue 关闭。
+- Phase 2 P2 / Issue #4 已完成自动化、真实 Supabase 和 Android 真机验收，代码已 push 到 `main`，Issue 可关闭。
 - 本阶段严格停止在 `uploads.status = uploaded`，未调用 AI extraction。
 
 ## 下一步
