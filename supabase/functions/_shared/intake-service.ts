@@ -13,12 +13,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { ServerAIProvider } from "./ai-provider.ts";
 import { BackendError } from "./errors.ts";
-import { confirmExtractionTransaction } from "./repositories.ts";
+import {
+  confirmExtractionTransaction,
+  type AIUsageMetrics,
+} from "./repositories.ts";
 
 interface IntakeUploadRepository {
-  markCompleted(id: EntityId): Promise<void>;
-  markFailed(id: EntityId, errorCode: string): Promise<void>;
-  markProcessing(id: EntityId): Promise<void>;
   verifyAndMarkUploaded(
     id: EntityId,
   ): Promise<{ imageBytes: Uint8Array; upload: Upload }>;
@@ -28,13 +28,21 @@ interface IntakeExtractionRepository {
   complete(
     extractionId: EntityId,
     result: AIExtractionResult,
-    provider: string,
-    model: string,
+    usage: AIUsageMetrics,
   ): Promise<AIExtraction>;
-  fail(extractionId: EntityId, errorCode: string): Promise<void>;
+  fail(
+    extractionId: EntityId,
+    errorCode: string,
+    usage: Pick<AIUsageMetrics, "attemptCount" | "durationMs">,
+  ): Promise<void>;
   findByUpload(uploadId: EntityId): Promise<AIExtraction | null>;
   getById(id: EntityId): Promise<AIExtraction | null>;
-  start(uploadId: EntityId): Promise<AIExtraction>;
+  reserve(
+    uploadId: EntityId,
+    requestId: string,
+    provider: string,
+    model: string,
+  ): Promise<{ extraction: AIExtraction; shouldInvokeProvider: boolean }>;
 }
 
 export class SupabaseIntakeService implements IntakeService {
@@ -43,6 +51,8 @@ export class SupabaseIntakeService implements IntakeService {
     private readonly uploads: IntakeUploadRepository,
     private readonly extractions: IntakeExtractionRepository,
     private readonly provider: ServerAIProvider,
+    private readonly now: () => number = () => Date.now(),
+    private readonly createRequestId: () => string = () => crypto.randomUUID(),
   ) {}
 
   async requestExtraction(uploadId: EntityId): Promise<AIExtraction> {
@@ -56,33 +66,41 @@ export class SupabaseIntakeService implements IntakeService {
 
     const { imageBytes, upload } =
       await this.uploads.verifyAndMarkUploaded(uploadId);
-    await this.uploads.markProcessing(uploadId);
-    const extraction = await this.extractions.start(uploadId);
-
-    if (
-      extraction.status === "needs_review" ||
-      extraction.status === "confirmed"
-    ) {
-      return extraction;
+    const reservation = await this.extractions.reserve(
+      uploadId,
+      this.createRequestId(),
+      this.provider.providerName,
+      this.provider.modelName,
+    );
+    if (!reservation.shouldInvokeProvider) {
+      return reservation.extraction;
     }
+    const extraction = reservation.extraction;
+    const providerStartedAt = this.now();
 
-    let rawResult: unknown;
+    let execution: Awaited<ReturnType<ServerAIProvider["extractScreenshot"]>>;
     try {
-      rawResult = await this.provider.extractScreenshot({
+      execution = await this.provider.extractScreenshot({
         imageBytes,
         mimeType: upload.mimeType,
       });
     } catch (error) {
-      await this.recordFailure(uploadId, extraction.id, "provider_error");
+      await this.recordFailure(extraction.id, "provider_error", {
+        attemptCount: providerAttemptCount(error),
+        durationMs: elapsedMilliseconds(providerStartedAt, this.now()),
+      });
       throw normalizeProviderError(error);
     }
 
-    const validated = AIExtractionResultSchema.safeParse(rawResult);
+    const validated = AIExtractionResultSchema.safeParse(execution.result);
     if (!validated.success) {
       await this.recordFailure(
-        uploadId,
         extraction.id,
         "invalid_provider_output",
+        {
+          attemptCount: execution.usage.attemptCount,
+          durationMs: elapsedMilliseconds(providerStartedAt, this.now()),
+        },
       );
       throw new BackendError({
         code: "extraction_failed",
@@ -97,10 +115,11 @@ export class SupabaseIntakeService implements IntakeService {
     const completed = await this.extractions.complete(
       extraction.id,
       safeResult,
-      this.provider.providerName,
-      this.provider.modelName,
+      {
+        ...execution.usage,
+        durationMs: elapsedMilliseconds(providerStartedAt, this.now()),
+      },
     );
-    await this.uploads.markCompleted(uploadId);
     return completed;
   }
 
@@ -147,15 +166,27 @@ export class SupabaseIntakeService implements IntakeService {
   }
 
   private async recordFailure(
-    uploadId: EntityId,
     extractionId: EntityId,
     errorCode: string,
+    usage: Pick<AIUsageMetrics, "attemptCount" | "durationMs">,
   ): Promise<void> {
-    await Promise.all([
-      this.extractions.fail(extractionId, errorCode),
-      this.uploads.markFailed(uploadId, errorCode),
-    ]);
+    await this.extractions.fail(extractionId, errorCode, usage);
   }
+}
+
+function elapsedMilliseconds(startedAt: number, completedAt: number) {
+  return Math.max(0, Math.round(completedAt - startedAt));
+}
+
+function providerAttemptCount(error: unknown) {
+  if (
+    error instanceof BackendError &&
+    Number.isSafeInteger(error.details?.attemptCount) &&
+    Number(error.details?.attemptCount) >= 1
+  ) {
+    return Number(error.details?.attemptCount);
+  }
+  return 1;
 }
 
 function hasDanglingRequirementReference(result: AIExtractionResult): boolean {

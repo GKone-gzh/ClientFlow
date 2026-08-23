@@ -7,6 +7,7 @@ export const CONTRACT_ERROR_CODES = [
   "upload_failed",
   "extraction_failed",
   "rate_limited",
+  "quota_exceeded",
   "internal_error",
 ] as const;
 

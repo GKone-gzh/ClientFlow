@@ -54,7 +54,10 @@ test("Qwen sends verified bytes with the correct MIME and fixed safe settings", 
     mimeType: "image/png",
   });
 
-  assert.deepEqual(result, validResult);
+  assert.deepEqual(result, {
+    result: validResult,
+    usage: { attemptCount: 1, inputTokens: 200, outputTokens: 100 },
+  });
   assert.equal(capturedUrl, QWEN_CHAT_COMPLETIONS_URL);
   assert.equal(capturedInit?.method, "POST");
   assert.equal(
@@ -106,7 +109,7 @@ test("provider result remains unknown until the shared schema validates it", asy
 
   const result = await provider.extractScreenshot(validInput());
 
-  assert.equal(AIExtractionResultSchema.safeParse(result).success, false);
+  assert.equal(AIExtractionResultSchema.safeParse(result.result).success, false);
 });
 
 test("malformed provider JSON is rejected without exposing its body", async () => {
@@ -157,7 +160,8 @@ test("timeout is retryable but does not automatically duplicate a costly call", 
       error instanceof BackendError &&
       error.code === "extraction_failed" &&
       error.retryable &&
-      error.status === 504
+      error.status === 504 &&
+      error.details?.attemptCount === 1
     );
   });
   assert.equal(calls, 1);
@@ -181,7 +185,10 @@ test("429 retries once with a capped delay and then succeeds", async () => {
 
   const result = await provider.extractScreenshot(validInput());
 
-  assert.deepEqual(result, validResult);
+  assert.deepEqual(result, {
+    result: validResult,
+    usage: { attemptCount: 2, inputTokens: 200, outputTokens: 100 },
+  });
   assert.equal(calls, 2);
   assert.deepEqual(delays, [1000]);
 });
@@ -201,6 +208,7 @@ test("exhausted 429 maps to the stable rate_limited contract", async () => {
       error instanceof BackendError &&
       error.code === "rate_limited" &&
       error.retryable &&
+      error.details?.attemptCount === 2 &&
       !error.message.includes("sensitive")
     );
   });

@@ -51,12 +51,12 @@
 - Mock/Supabase composition 已拆分；Supabase production 路径不创建 Mock services 且始终不暴露 development tools。production 缺少 adapter 或选择 Mock 会 fail closed。
 - Public env 已拒绝 service-role、`sb_secret_`、AI Provider、DashScope 和 admin token 类配置；生产 Web smoke 显式验证 Supabase composition。
 - 新 migration 已增加 server-only AI rate-limit config、usage 台账与原子 reserve/complete/fail RPC。默认并发 1、滚动分钟 5、小时 30、24 小时 100；`authenticated` 无 private 表或 AI 状态 RPC 权限。
+- Edge Intake 已接入原子 reservation/complete/fail；Qwen 的实际 attempt count 和可靠 token usage 会进入 private usage。Provider 成功但完成写库不确定时保持 processing，不自动重复付费调用。
 
 ## 下一步
 
-1. 将 Edge Intake service 接入数据库原子 reserve/complete/fail，并记录可靠 Provider usage。
-2. 增加 request ID、安全日志、权限攻击测试和基础 Security CI。
-3. 部署并完成真实 Supabase、User A/B、额度、重复请求和 Android 真机全链路回归；全部通过后关闭 Issue #7。
+1. 增加 request ID、安全日志、权限攻击测试和基础 Security CI。
+2. 部署并完成真实 Supabase、User A/B、额度、重复请求和 Android 真机全链路回归；全部通过后关闭 Issue #7。
 
 ## 环境限制
 

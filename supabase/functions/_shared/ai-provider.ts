@@ -9,6 +9,19 @@ import {
 export interface ServerAIProvider extends AIProvider {
   readonly modelName: string;
   readonly providerName: string;
+  extractScreenshot(input: {
+    mimeType: string;
+    imageBytes: Uint8Array;
+  }): Promise<ServerAIProviderResult>;
+}
+
+export interface ServerAIProviderResult {
+  result: unknown;
+  usage: {
+    attemptCount: number;
+    inputTokens: number | null;
+    outputTokens: number | null;
+  };
 }
 
 export class ConfiguredStubAIProvider implements ServerAIProvider {
@@ -17,7 +30,7 @@ export class ConfiguredStubAIProvider implements ServerAIProvider {
 
   constructor(private readonly configuredResultJson: string | undefined) {}
 
-  async extractScreenshot(): Promise<unknown> {
+  async extractScreenshot(): Promise<ServerAIProviderResult> {
     if (this.configuredResultJson === undefined) {
       throw new BackendError({
         code: "extraction_failed",
@@ -28,7 +41,10 @@ export class ConfiguredStubAIProvider implements ServerAIProvider {
     }
 
     try {
-      return JSON.parse(this.configuredResultJson) as unknown;
+      return {
+        result: JSON.parse(this.configuredResultJson) as unknown,
+        usage: { attemptCount: 1, inputTokens: null, outputTokens: null },
+      };
     } catch (error) {
       throw new BackendError({
         code: "extraction_failed",

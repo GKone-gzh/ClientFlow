@@ -97,6 +97,8 @@ interface AIProvider {
 
 Provider 只能在 Edge Function/安全后端实现和调用。返回 `unknown` 是刻意设计：调用方必须使用 `AIExtractionResultSchema.safeParse`，不能对模型输出做类型断言。
 
+服务端内部 `ServerAIProvider` 在该公共端口外包装为 `{ result, usage }`。`result` 仍是 `unknown`；`usage` 只包含实际 attempt count 以及 Provider 明确返回的 nullable input/output token。不得从图片大小或文本长度估算 token 并冒充账单数据。
+
 当前 extraction schema version 为 `1`，包含：client candidate、project candidate、至少一个 requirement、suggested tasks、confidence 和 warnings。修改必填字段或语义时必须提升版本并保留兼容读取策略。
 
 服务端 Provider 配置合同：

@@ -37,6 +37,13 @@ const QwenResponseSchema = z
           .passthrough(),
       )
       .min(1),
+    usage: z
+      .object({
+        completion_tokens: z.number().int().nonnegative().optional(),
+        prompt_tokens: z.number().int().nonnegative().optional(),
+      })
+      .passthrough()
+      .optional(),
   })
   .passthrough();
 
@@ -129,19 +136,31 @@ export class QwenVisionAIProvider implements ServerAIProvider {
   async extractScreenshot(input: {
     mimeType: string;
     imageBytes: Uint8Array;
-  }): Promise<unknown> {
+  }) {
     validateScreenshot(input);
     const requestBody = buildRequestBody(input);
 
     for (let attempt = 1; attempt <= this.maxAttempts; attempt += 1) {
-      const response = await this.requestAttempt(requestBody);
-      if (isTransientStatus(response.status) && attempt < this.maxAttempts) {
-        await discardResponse(response);
-        await this.retryDelay(readRetryDelay(response));
-        continue;
-      }
+      try {
+        const response = await this.requestAttempt(requestBody);
+        if (isTransientStatus(response.status) && attempt < this.maxAttempts) {
+          await discardResponse(response);
+          await this.retryDelay(readRetryDelay(response));
+          continue;
+        }
 
-      return parseResponse(response);
+        const parsed = await parseResponse(response);
+        return {
+          result: parsed.result,
+          usage: {
+            attemptCount: attempt,
+            inputTokens: parsed.inputTokens,
+            outputTokens: parsed.outputTokens,
+          },
+        };
+      } catch (error) {
+        throw withAttemptCount(error, attempt);
+      }
     }
 
     throw new BackendError({
@@ -241,7 +260,7 @@ function validateScreenshot(input: {
   }
 }
 
-async function parseResponse(response: Response): Promise<unknown> {
+async function parseResponse(response: Response) {
   if (response.status === 429) {
     await discardResponse(response);
     throw new BackendError({
@@ -288,10 +307,36 @@ async function parseResponse(response: Response): Promise<unknown> {
     throw invalidResponseError();
   }
   try {
-    return JSON.parse(content) as unknown;
+    return {
+      result: JSON.parse(content) as unknown,
+      inputTokens: envelope.data.usage?.prompt_tokens ?? null,
+      outputTokens: envelope.data.usage?.completion_tokens ?? null,
+    };
   } catch (error) {
     throw invalidResponseError(error);
   }
+}
+
+function withAttemptCount(error: unknown, attemptCount: number): BackendError {
+  if (error instanceof BackendError) {
+    return new BackendError({
+      code: error.code,
+      message: error.message,
+      retryable: error.retryable,
+      status: error.status,
+      details: { attemptCount },
+      cause: error,
+    });
+  }
+
+  return new BackendError({
+    code: "extraction_failed",
+    message: "The Qwen provider request failed",
+    retryable: true,
+    status: 502,
+    details: { attemptCount },
+    cause: error,
+  });
 }
 
 async function readLimitedText(response: Response): Promise<string> {

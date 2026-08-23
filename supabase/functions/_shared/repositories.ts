@@ -1,6 +1,5 @@
 import type {
   AIExtraction,
-  AIExtractionRepository,
   AIExtractionResult,
   Client,
   ClientRepository,
@@ -152,9 +151,7 @@ export class SupabaseTaskRepository implements TaskRepository {
   }
 }
 
-export class SupabaseAIExtractionRepository
-  implements AIExtractionRepository
-{
+export class SupabaseAIExtractionRepository {
   constructor(
     private readonly admin: SupabaseClient,
     private readonly userId: string,
@@ -171,64 +168,67 @@ export class SupabaseAIExtractionRepository
     return data === null ? null : mapExtraction(data);
   }
 
-  async start(uploadId: EntityId): Promise<AIExtraction> {
-    const existing = await this.findByUpload(uploadId);
-    if (existing !== null) {
-      return this.transitionToProcessing(existing);
+  async reserve(
+    uploadId: EntityId,
+    requestId: string,
+    provider: string,
+    model: string,
+  ): Promise<{ extraction: AIExtraction; shouldInvokeProvider: boolean }> {
+    const { data, error } = await this.admin.rpc("reserve_ai_extraction", {
+      p_model: model,
+      p_provider: provider,
+      p_request_id: requestId,
+      p_upload_id: uploadId,
+      p_user_id: this.userId,
+    });
+    throwIfDatabaseError(error, "Unable to reserve the extraction");
+
+    const row = firstRow(data);
+    const extraction = await this.getById(String(row.extraction_id));
+    if (extraction === null) {
+      throw new BackendError({
+        code: "internal_error",
+        message: "The extraction reservation returned no record",
+        status: 500,
+      });
     }
 
-    const { data, error } = await this.admin
-      .from("ai_extractions")
-      .insert({
-        user_id: this.userId,
-        upload_id: uploadId,
-        status: "processing",
-      })
-      .select("*")
-      .single();
-
-    if (getErrorCode(error) === "23505") {
-      const raced = await this.findByUpload(uploadId);
-      if (raced !== null) {
-        return this.transitionToProcessing(raced);
-      }
-    }
-
-    throwIfDatabaseError(error, "Unable to start extraction");
-    return mapExtraction(requireData(data));
+    return {
+      extraction,
+      shouldInvokeProvider: row.should_invoke_provider === true,
+    };
   }
 
   async complete(
     extractionId: EntityId,
     result: AIExtractionResult,
-    provider: string,
-    model: string,
+    usage: AIUsageMetrics,
   ): Promise<AIExtraction> {
-    const { data, error } = await this.admin
-      .from("ai_extractions")
-      .update({
-        status: "needs_review",
-        result,
-        provider,
-        model,
-        error_code: null,
-      })
-      .eq("id", extractionId)
-      .eq("user_id", this.userId)
-      .eq("status", "processing")
-      .select("*")
-      .single();
+    const { data, error } = await this.admin.rpc("complete_ai_extraction", {
+      p_attempt_count: usage.attemptCount,
+      p_duration_ms: usage.durationMs,
+      p_extraction_id: extractionId,
+      p_input_tokens: usage.inputTokens,
+      p_output_tokens: usage.outputTokens,
+      p_result: result,
+      p_user_id: this.userId,
+    });
     throwIfDatabaseError(error, "Unable to save extraction result");
-    return mapExtraction(requireData(data));
+    return mapExtraction(firstRow(data));
   }
 
-  async fail(extractionId: EntityId, errorCode: string): Promise<void> {
-    const { error } = await this.admin
-      .from("ai_extractions")
-      .update({ status: "failed", result: null, error_code: errorCode })
-      .eq("id", extractionId)
-      .eq("user_id", this.userId)
-      .eq("status", "processing");
+  async fail(
+    extractionId: EntityId,
+    errorCode: string,
+    usage: Pick<AIUsageMetrics, "attemptCount" | "durationMs">,
+  ): Promise<void> {
+    const { error } = await this.admin.rpc("fail_ai_extraction", {
+      p_attempt_count: usage.attemptCount,
+      p_duration_ms: usage.durationMs,
+      p_error_code: errorCode,
+      p_extraction_id: extractionId,
+      p_user_id: this.userId,
+    });
     throwIfDatabaseError(error, "Unable to record extraction failure");
   }
 
@@ -243,36 +243,13 @@ export class SupabaseAIExtractionRepository
     return data === null ? null : mapExtraction(data);
   }
 
-  private async transitionToProcessing(
-    extraction: AIExtraction,
-  ): Promise<AIExtraction> {
-    if (
-      extraction.status === "needs_review" ||
-      extraction.status === "confirmed"
-    ) {
-      return extraction;
-    }
+}
 
-    if (extraction.status !== "queued") {
-      throw new BackendError({
-        code: "conflict",
-        message: "The extraction cannot be started in its current state",
-        retryable: extraction.status === "processing",
-        status: 409,
-      });
-    }
-
-    const { data, error } = await this.admin
-      .from("ai_extractions")
-      .update({ status: "processing", error_code: null })
-      .eq("id", extraction.id)
-      .eq("user_id", this.userId)
-      .eq("status", "queued")
-      .select("*")
-      .single();
-    throwIfDatabaseError(error, "Unable to start extraction");
-    return mapExtraction(requireData(data));
-  }
+export interface AIUsageMetrics {
+  attemptCount: number;
+  durationMs: number;
+  inputTokens: number | null;
+  outputTokens: number | null;
 }
 
 export async function confirmExtractionTransaction(
@@ -355,9 +332,14 @@ function requireData(data: unknown): Record<string, unknown> {
   return data as Record<string, unknown>;
 }
 
-function getErrorCode(error: unknown): string | undefined {
-  if (typeof error !== "object" || error === null || !("code" in error)) {
-    return undefined;
+function firstRow(data: unknown): Record<string, unknown> {
+  const row = Array.isArray(data) ? data[0] : data;
+  if (typeof row !== "object" || row === null) {
+    throw new BackendError({
+      code: "internal_error",
+      message: "The database returned no record",
+      status: 500,
+    });
   }
-  return typeof error.code === "string" ? error.code : undefined;
+  return row as Record<string, unknown>;
 }

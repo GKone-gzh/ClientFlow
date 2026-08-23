@@ -203,48 +203,6 @@ export class SupabaseUploadRepository implements UploadRepository {
     return { imageBytes, upload: mapUpload(requireRow(data)) };
   }
 
-  async markProcessing(id: EntityId): Promise<void> {
-    await this.transition(id, "uploaded", "processing");
-  }
-
-  async markCompleted(id: EntityId): Promise<void> {
-    await this.transition(id, "processing", "completed");
-  }
-
-  async markFailed(id: EntityId, errorCode: string): Promise<void> {
-    const { error } = await this.admin
-      .from("uploads")
-      .update({ status: "failed", error_code: errorCode })
-      .eq("id", id)
-      .eq("user_id", this.userId)
-      .in("status", ["pending", "uploaded", "processing"]);
-    throwIfError(error, "Unable to record the upload failure");
-  }
-
-  private async transition(
-    id: EntityId,
-    from: Upload["status"],
-    to: Upload["status"],
-  ): Promise<void> {
-    const { data, error } = await this.admin
-      .from("uploads")
-      .update({ status: to, error_code: null })
-      .eq("id", id)
-      .eq("user_id", this.userId)
-      .eq("status", from)
-      .select("id")
-      .maybeSingle();
-    throwIfError(error, "Unable to update the upload state");
-
-    if (data === null) {
-      throw new BackendError({
-        code: "conflict",
-        message: "The upload state changed concurrently",
-        retryable: true,
-        status: 409,
-      });
-    }
-  }
 }
 
 function throwIfError(error: unknown, message: string): void {

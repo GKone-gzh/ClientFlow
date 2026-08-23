@@ -60,6 +60,36 @@ export function databaseError(
     });
   }
 
+  if (code === "CF001") {
+    return new BackendError({
+      code: "rate_limited",
+      message: "The AI request rate limit was reached",
+      retryable: true,
+      status: 429,
+      cause: error,
+    });
+  }
+
+  if (code === "CF002") {
+    return new BackendError({
+      code: "quota_exceeded",
+      message: "The daily AI request quota was reached",
+      retryable: false,
+      status: 429,
+      cause: error,
+    });
+  }
+
+  if (code === "CF003" || code === "CF004") {
+    return new BackendError({
+      code: "conflict",
+      message: "The extraction cannot be started in its current state",
+      retryable: code === "CF003",
+      status: 409,
+      cause: error,
+    });
+  }
+
   if (code === "22023" || code === "P0001") {
     return new BackendError({
       code: "validation_failed",

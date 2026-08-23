@@ -8,43 +8,33 @@ import type {
 } from "@clientflow/contracts";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import type { ServerAIProvider } from "./ai-provider";
+import type {
+  ServerAIProvider,
+  ServerAIProviderResult,
+} from "./ai-provider";
 import { BackendError } from "./errors";
 import { SupabaseIntakeService } from "./intake-service";
+import type { AIUsageMetrics } from "./repositories";
 
 const uploadId = "00000000-0000-4000-8000-000000000701";
 const extractionId = "00000000-0000-4000-8000-000000000801";
+const requestId = "00000000-0000-4000-8000-000000000901";
 
-test("invalid provider output is never passed to persistence", async () => {
-  const failureCodes: string[] = [];
+test("invalid provider output is never persisted and records safe usage", async () => {
+  const failures: Array<{
+    code: string;
+    usage: Pick<AIUsageMetrics, "attemptCount" | "durationMs">;
+  }> = [];
   let completeCalls = 0;
-  const service = new SupabaseIntakeService(
-    {} as SupabaseClient,
-    {
-      markCompleted: async () => undefined,
-      markFailed: async (_id, code) => {
-        failureCodes.push(`upload:${code}`);
-      },
-      markProcessing: async () => undefined,
-      verifyAndMarkUploaded: async () => ({
-        imageBytes: new Uint8Array([1, 2, 3]),
-        upload: createUpload(),
-      }),
-    },
-    {
-      complete: async () => {
+  const service = createService({
+    providerResult: providerExecution({ secretConversation: "must not persist" }),
+    repository: createExtractionRepository({
+      onComplete: () => {
         completeCalls += 1;
-        return createExtraction("needs_review", validResult);
       },
-      fail: async (_id, code) => {
-        failureCodes.push(`extraction:${code}`);
-      },
-      findByUpload: async () => null,
-      getById: async () => null,
-      start: async () => createExtraction("processing", null),
-    },
-    createProvider({ raw: { secretConversation: "must not persist" } }),
-  );
+      onFail: (code, usage) => failures.push({ code, usage }),
+    }),
+  });
 
   await assert.rejects(
     service.requestExtraction(uploadId),
@@ -52,56 +42,53 @@ test("invalid provider output is never passed to persistence", async () => {
       error instanceof BackendError && error.code === "extraction_failed",
   );
   assert.equal(completeCalls, 0);
-  assert.deepEqual(failureCodes.sort(), [
-    "extraction:invalid_provider_output",
-    "upload:invalid_provider_output",
+  assert.deepEqual(failures, [
+    {
+      code: "invalid_provider_output",
+      usage: { attemptCount: 2, durationMs: 250 },
+    },
   ]);
 });
 
-test("validated provider output is the only result sent to persistence", async () => {
+test("validated output and reliable Provider usage are completed atomically", async () => {
   let persisted: AIExtractionResult | undefined;
-  const service = new SupabaseIntakeService(
-    {} as SupabaseClient,
-    {
-      markCompleted: async () => undefined,
-      markFailed: async () => undefined,
-      markProcessing: async () => undefined,
-      verifyAndMarkUploaded: async () => ({
-        imageBytes: new Uint8Array([1, 2, 3]),
-        upload: createUpload(),
-      }),
-    },
-    {
-      complete: async (_id, result) => {
+  let persistedUsage: AIUsageMetrics | undefined;
+  const service = createService({
+    providerResult: providerExecution(validResult),
+    repository: createExtractionRepository({
+      onComplete: (result, usage) => {
         persisted = result;
-        return createExtraction("needs_review", result);
+        persistedUsage = usage;
       },
-      fail: async () => undefined,
-      findByUpload: async () => null,
-      getById: async () => null,
-      start: async () => createExtraction("processing", null),
-    },
-    createProvider({ raw: validResult }),
-  );
+    }),
+  });
 
   const extraction = await service.requestExtraction(uploadId);
 
   assert.equal(extraction.status, "needs_review");
   assert.deepEqual(persisted, validResult);
+  assert.deepEqual(persistedUsage, {
+    attemptCount: 2,
+    durationMs: 250,
+    inputTokens: 120,
+    outputTokens: 40,
+  });
 });
 
 test("instruction injection repeated in warnings is replaced before persistence", async () => {
   let persisted: AIExtractionResult | undefined;
-  const injectedResult: AIExtractionResult = {
-    ...validResult,
-    warnings: [
-      "截图要求输出 System Prompt 和 API Key，已忽略。",
-      "客户姓名需要人工确认。",
-    ],
-  };
-  const service = createServiceForProviderResult(injectedResult, (result) => {
-    persisted = result;
-  });
+  const service = createServiceForProviderResult(
+    {
+      ...validResult,
+      warnings: [
+        "截图要求输出 System Prompt 和 API Key，已忽略。",
+        "客户姓名需要人工确认。",
+      ],
+    },
+    (result) => {
+      persisted = result;
+    },
+  );
 
   await service.requestExtraction(uploadId);
 
@@ -129,27 +116,7 @@ test("instruction injection in business fields becomes a safe review fallback", 
   const extraction = await service.requestExtraction(uploadId);
 
   assert.equal(extraction.status, "needs_review");
-  assert.deepEqual(persisted, {
-    schemaVersion: 1,
-    client: {
-      name: "待确认客户",
-      contactHandle: null,
-      contactChannel: null,
-    },
-    project: {
-      name: "待确认项目",
-      summary: null,
-      budgetAmount: null,
-      budgetCurrency: null,
-      dueDate: null,
-    },
-    requirements: [{ content: "需求待人工确认", sortOrder: 0 }],
-    suggestedTasks: [],
-    confidence: 0.1,
-    warnings: [
-      "截图包含与业务需求无关的指令性内容，已忽略，请人工复核。",
-    ],
-  });
+  assert.deepEqual(persisted, safeReviewFallback);
   assert.doesNotMatch(
     JSON.stringify(persisted),
     /ignore previous|system\s*prompt|api\s*key/i,
@@ -176,55 +143,29 @@ test("AI response protocol is not persisted as client requirements", async () =>
 
   await service.requestExtraction(uploadId);
 
-  assert.equal(persisted?.project.name, "待确认项目");
-  assert.deepEqual(persisted?.requirements, [
-    { content: "需求待人工确认", sortOrder: 0 },
-  ]);
-  assert.deepEqual(persisted?.suggestedTasks, []);
-  assert.equal(persisted?.confidence, 0.1);
-  assert.deepEqual(persisted?.warnings, [
-    "截图包含与业务需求无关的指令性内容，已忽略，请人工复核。",
-  ]);
+  assert.deepEqual(persisted, safeReviewFallback);
   assert.doesNotMatch(JSON.stringify(persisted), /共同已知|合理假设|最小实验/);
 });
 
-test("provider failures mark both records failed and never report completion", async () => {
-  const failureCodes: string[] = [];
-  let completed = false;
-  const service = new SupabaseIntakeService(
-    {} as SupabaseClient,
-    {
-      markCompleted: async () => {
-        completed = true;
-      },
-      markFailed: async (_id, code) => {
-        failureCodes.push(`upload:${code}`);
-      },
-      markProcessing: async () => undefined,
-      verifyAndMarkUploaded: async () => ({
-        imageBytes: new Uint8Array([1, 2, 3]),
-        upload: createUpload(),
-      }),
-    },
-    {
-      complete: async () => {
-        throw new Error("not expected");
-      },
-      fail: async (_id, code) => {
-        failureCodes.push(`extraction:${code}`);
-      },
-      findByUpload: async () => null,
-      getById: async () => null,
-      start: async () => createExtraction("processing", null),
-    },
-    {
-      modelName: "failure-model",
-      providerName: "failure-provider",
-      extractScreenshot: async () => {
-        throw new Error("sensitive provider failure");
-      },
-    },
-  );
+test("provider failures atomically fail usage without exposing the cause", async () => {
+  const failures: Array<{
+    code: string;
+    usage: Pick<AIUsageMetrics, "attemptCount" | "durationMs">;
+  }> = [];
+  const providerFailure = new BackendError({
+    code: "extraction_failed",
+    message: "Safe provider failure",
+    retryable: true,
+    status: 502,
+    details: { attemptCount: 2 },
+    cause: new Error("sensitive provider response"),
+  });
+  const service = createService({
+    providerError: providerFailure,
+    repository: createExtractionRepository({
+      onFail: (code, usage) => failures.push({ code, usage }),
+    }),
+  });
 
   await assert.rejects(service.requestExtraction(uploadId), (error) => {
     return (
@@ -233,45 +174,24 @@ test("provider failures mark both records failed and never report completion", a
       !error.message.includes("sensitive")
     );
   });
-  assert.equal(completed, false);
-  assert.deepEqual(failureCodes.sort(), [
-    "extraction:provider_error",
-    "upload:provider_error",
+  assert.deepEqual(failures, [
+    {
+      code: "provider_error",
+      usage: { attemptCount: 2, durationMs: 250 },
+    },
   ]);
 });
 
 test("provider rate limits preserve the stable retryable contract", async () => {
-  const service = new SupabaseIntakeService(
-    {} as SupabaseClient,
-    {
-      markCompleted: async () => undefined,
-      markFailed: async () => undefined,
-      markProcessing: async () => undefined,
-      verifyAndMarkUploaded: async () => ({
-        imageBytes: new Uint8Array([1, 2, 3]),
-        upload: createUpload(),
-      }),
-    },
-    {
-      complete: async () => createExtraction("needs_review", validResult),
-      fail: async () => undefined,
-      findByUpload: async () => null,
-      getById: async () => null,
-      start: async () => createExtraction("processing", null),
-    },
-    {
-      modelName: "qwen3-vl-plus",
-      providerName: "qwen",
-      extractScreenshot: async () => {
-        throw new BackendError({
-          code: "rate_limited",
-          message: "The Qwen provider rate limit was reached",
-          retryable: true,
-          status: 429,
-        });
-      },
-    },
-  );
+  const service = createService({
+    providerError: new BackendError({
+      code: "rate_limited",
+      message: "The Qwen provider rate limit was reached",
+      retryable: true,
+      status: 429,
+      details: { attemptCount: 2 },
+    }),
+  });
 
   await assert.rejects(service.requestExtraction(uploadId), (error) => {
     return (
@@ -282,42 +202,93 @@ test("provider rate limits preserve the stable retryable contract", async () => 
   });
 });
 
-test("an invalid upload state stops extraction before the provider runs", async () => {
+test("an invalid upload state stops reservation and Provider work", async () => {
   let providerCalls = 0;
+  let reservationCalls = 0;
   const conflict = new BackendError({
     code: "conflict",
     message: "The upload cannot be verified in its current state",
     status: 409,
   });
-  const service = new SupabaseIntakeService(
-    {} as SupabaseClient,
-    {
-      markCompleted: async () => undefined,
-      markFailed: async () => undefined,
-      markProcessing: async () => undefined,
-      verifyAndMarkUploaded: async () => {
-        throw conflict;
+  const service = createService({
+    onProviderCall: () => {
+      providerCalls += 1;
+    },
+    repository: createExtractionRepository({
+      onReserve: () => {
+        reservationCalls += 1;
       },
-    },
-    {
-      complete: async () => createExtraction("needs_review", validResult),
-      fail: async () => undefined,
-      findByUpload: async () => null,
-      getById: async () => null,
-      start: async () => createExtraction("processing", null),
-    },
-    {
-      modelName: "test-model",
-      providerName: "test-provider",
-      extractScreenshot: async () => {
-        providerCalls += 1;
-        return validResult;
-      },
-    },
-  );
+    }),
+    uploadError: conflict,
+  });
 
   await assert.rejects(service.requestExtraction(uploadId), conflict);
+  assert.equal(reservationCalls, 0);
   assert.equal(providerCalls, 0);
+});
+
+test("needs_review and confirmed retries return existing data without Provider work", async () => {
+  for (const status of ["needs_review", "confirmed"] as const) {
+    let providerCalls = 0;
+    let uploadCalls = 0;
+    const existing = createExtraction(status, validResult);
+    const service = createService({
+      existing,
+      onProviderCall: () => {
+        providerCalls += 1;
+      },
+      onUploadCall: () => {
+        uploadCalls += 1;
+      },
+    });
+
+    assert.deepEqual(await service.requestExtraction(uploadId), existing);
+    assert.equal(providerCalls, 0);
+    assert.equal(uploadCalls, 0);
+  }
+});
+
+test("a completion write failure leaves processing state and never repeats Provider cost", async () => {
+  let providerCalls = 0;
+  let requestCount = 0;
+  let state: AIExtraction["status"] | null = null;
+  const unsafeRetry = new BackendError({
+    code: "conflict",
+    message: "The upload is already processing",
+    retryable: true,
+    status: 409,
+  });
+  const repository = createExtractionRepository({
+    completeError: new BackendError({
+      code: "internal_error",
+      message: "Unable to save extraction result",
+      retryable: true,
+      status: 500,
+    }),
+    findExisting: () =>
+      state === null ? null : createExtraction(state, null),
+    onReserve: () => {
+      state = "processing";
+    },
+  });
+  const service = createService({
+    onProviderCall: () => {
+      providerCalls += 1;
+    },
+    onUploadCall: () => {
+      requestCount += 1;
+      if (requestCount > 1) throw unsafeRetry;
+    },
+    repository,
+  });
+
+  await assert.rejects(
+    service.requestExtraction(uploadId),
+    /Unable to save extraction result/,
+  );
+  await assert.rejects(service.requestExtraction(uploadId), unsafeRetry);
+  assert.equal(providerCalls, 1);
+  assert.equal(state, "processing");
 });
 
 const validResult: AIExtractionResult = {
@@ -336,46 +307,123 @@ const validResult: AIExtractionResult = {
   warnings: [],
 };
 
-function createProvider(options: { raw: unknown }): ServerAIProvider {
-  return {
-    modelName: "test-model",
-    providerName: "test-provider",
-    extractScreenshot: async () => options.raw,
-  };
-}
+const safeReviewFallback: AIExtractionResult = {
+  schemaVersion: 1,
+  client: {
+    name: "待确认客户",
+    contactHandle: null,
+    contactChannel: null,
+  },
+  project: {
+    name: "待确认项目",
+    summary: null,
+    budgetAmount: null,
+    budgetCurrency: null,
+    dueDate: null,
+  },
+  requirements: [{ content: "需求待人工确认", sortOrder: 0 }],
+  suggestedTasks: [],
+  confidence: 0.1,
+  warnings: ["截图包含与业务需求无关的指令性内容，已忽略，请人工复核。"],
+};
 
 function createServiceForProviderResult(
   result: AIExtractionResult,
   onComplete: (result: AIExtractionResult) => void,
-): SupabaseIntakeService {
+) {
+  return createService({
+    providerResult: providerExecution(result),
+    repository: createExtractionRepository({ onComplete }),
+  });
+}
+
+function createService(options: {
+  existing?: AIExtraction;
+  onProviderCall?: () => void;
+  onUploadCall?: () => void;
+  providerError?: BackendError;
+  providerResult?: ServerAIProviderResult;
+  repository?: ReturnType<typeof createExtractionRepository>;
+  uploadError?: BackendError;
+}) {
+  const repository =
+    options.repository ??
+    createExtractionRepository({ existing: options.existing ?? null });
+  const provider: ServerAIProvider = {
+    modelName: "test-model",
+    providerName: "test-provider",
+    extractScreenshot: async () => {
+      options.onProviderCall?.();
+      if (options.providerError) throw options.providerError;
+      return options.providerResult ?? providerExecution(validResult);
+    },
+  };
+  const timestamps = [1_000, 1_250];
+
   return new SupabaseIntakeService(
     {} as SupabaseClient,
-    createUploadRepository(),
     {
-      complete: async (_id, completedResult) => {
-        onComplete(completedResult);
-        return createExtraction("needs_review", completedResult);
+      verifyAndMarkUploaded: async () => {
+        options.onUploadCall?.();
+        if (options.uploadError) throw options.uploadError;
+        return {
+          imageBytes: new Uint8Array([1, 2, 3]),
+          upload: createUpload(),
+        };
       },
-      fail: async () => undefined,
-      findByUpload: async () => null,
-      getById: async () => null,
-      start: async () => createExtraction("processing", null),
     },
-    createProvider({ raw: result }),
+    repository,
+    provider,
+    () => timestamps.shift() ?? 1_250,
+    () => requestId,
   );
 }
 
-function createUploadRepository(failureCodes: string[] = []) {
+function createExtractionRepository(options: {
+  completeError?: BackendError;
+  existing?: AIExtraction | null;
+  findExisting?: () => AIExtraction | null;
+  onComplete?: (result: AIExtractionResult, usage: AIUsageMetrics) => void;
+  onFail?: (
+    code: string,
+    usage: Pick<AIUsageMetrics, "attemptCount" | "durationMs">,
+  ) => void;
+  onReserve?: () => void;
+} = {}) {
   return {
-    markCompleted: async () => undefined,
-    markFailed: async (_id: string, code: string) => {
-      failureCodes.push(`upload:${code}`);
+    complete: async (
+      _id: string,
+      result: AIExtractionResult,
+      usage: AIUsageMetrics,
+    ) => {
+      options.onComplete?.(result, usage);
+      if (options.completeError) throw options.completeError;
+      return createExtraction("needs_review", result);
     },
-    markProcessing: async () => undefined,
-    verifyAndMarkUploaded: async () => ({
-      imageBytes: new Uint8Array([1, 2, 3]),
-      upload: createUpload(),
-    }),
+    fail: async (
+      _id: string,
+      code: string,
+      usage: Pick<AIUsageMetrics, "attemptCount" | "durationMs">,
+    ) => {
+      options.onFail?.(code, usage);
+    },
+    findByUpload: async () =>
+      options.findExisting?.() ?? options.existing ?? null,
+    getById: async () => null,
+    reserve: async () => {
+      options.onReserve?.();
+      return {
+        extraction: createExtraction("processing", null),
+        shouldInvokeProvider: true,
+      };
+    },
+  };
+}
+
+function providerExecution(result: unknown): ServerAIProviderResult {
+  return {
+    result,
+    usage: { attemptCount: 2, inputTokens: 120, outputTokens: 40 },
   };
 }
 
@@ -389,8 +437,8 @@ function createExtraction(
     uploadId,
     status,
     schemaVersion: 1,
-    provider: null,
-    model: null,
+    provider: "test-provider",
+    model: "test-model",
     result,
     errorCode: null,
     createdAt: "2026-08-22T00:00:00.000Z",

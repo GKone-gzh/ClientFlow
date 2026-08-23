@@ -99,6 +99,8 @@ MVP 不持久化未通过校验的完整 Provider raw output，也不在日志�
 
 首个真实实现由项目所有者选择阿里云百炼 `qwen3-vl-plus`。服务端以非思考模式请求 JSON Object，并继续把返回内容视为不可信 `unknown`。`AI_PROVIDER=stub|qwen` 是 Edge Function 的 server-only 运行时开关；Qwen API Key 只能配置为 Supabase Secret `DASHSCOPE_API_KEY`。客户端不能选择 Provider、模型、endpoint 或请求参数。
 
+Edge Intake 在下载并复核图片后调用 service-role-only reservation RPC。只有返回 `should_invoke_provider=true` 才能执行 Provider。成功后 complete RPC 原子写入已校验 result 和 usage；失败后 fail RPC 原子结束三个状态。若 Provider 已成功但 complete RPC 的结果不确定，记录保持 `processing`，客户端重试不得自动再次调用 Provider，需要后续受控恢复流程处理。
+
 ## 6. 前后端关系
 
 客户端 Repository 实现可封装 Supabase SDK，但调用者只依赖 `@clientflow/contracts` 中的接口。服务端负责授权、归属、状态转换和事务；客户端负责输入、呈现和交互状态。
