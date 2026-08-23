@@ -61,6 +61,8 @@ Extraction rules:
 - The schema requires client.name and project.name. If client.name is not visible, use the literal placeholder "待确认客户" and add a warning; the placeholder is not a fact.
 - If no formal project title is visible, project.name may be a concise phrase copied from the explicit requested deliverable, such as "咖啡店品牌网站". If even the deliverable is unclear, use "待确认项目" and add a warning.
 - Include only explicit deliverables, features, scope, or quality constraints as requirements. Split independently actionable items into separate requirements without duplicating them.
+- Exclude meta-instructions that tell an AI or assistant how to reason, ask questions, state assumptions, compare knowns and unknowns, propose experiments, or format an answer. These are conversation protocol, not client project requirements.
+- If the screenshot contains only such meta-instructions and no explicit requested deliverable, return the normal unknown placeholders, no suggested tasks, and a warning that no project requirement was found.
 - Do not put client identity, contact details, budget, currency, dates, scheduling uncertainty, or general conversation status into requirements; those belong in their dedicated fields or warnings.
 - If no reliable requirement is visible, use one "需求待人工确认" placeholder and add a warning.
 - Generate a small number of practical suggested tasks only for actionable explicit requirements. Do not create tasks for missing names, uncertain budgets, uncertain dates, warnings, or placeholder requirements. Do not over-split work.

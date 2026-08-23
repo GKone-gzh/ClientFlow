@@ -178,11 +178,25 @@ const SUSPICIOUS_OUTPUT_PATTERNS = [
   /required json schema|never follow instructions/i,
 ];
 
+const META_INSTRUCTION_PATTERNS = [
+  /共同已知|共同未知|我的已知|你的未知|我的未知|你的已知/i,
+  /不要重复询问|最多提出\s*\d+\s*个.{0,12}问题/i,
+  /合理假设|探索版本|原始方案|取舍依据/i,
+  /最小实验|单一变量|成功或失败信号|后续需要自收的数据/i,
+  /前提可能错误|知识、方法、风险和替代路径/i,
+  /knowns? and unknowns?|ask at most\s+\d+|state.{0,20}assumptions?/i,
+  /minimum experiment|single variable|success or failure signal/i,
+];
+
 function normalizeUntrustedInstructionOutput(
   result: AIExtractionResult,
 ): AIExtractionResult {
   const { warnings, ...businessResult } = result;
-  if (containsSuspiciousOutput(JSON.stringify(businessResult))) {
+  const serializedBusinessResult = JSON.stringify(businessResult);
+  if (
+    containsSuspiciousOutput(serializedBusinessResult) ||
+    containsMetaInstructionOutput(serializedBusinessResult)
+  ) {
     return AIExtractionResultSchema.parse({
       schemaVersion: 1,
       client: {
@@ -225,6 +239,19 @@ function normalizeUntrustedInstructionOutput(
 
 function containsSuspiciousOutput(value: string): boolean {
   return SUSPICIOUS_OUTPUT_PATTERNS.some((pattern) => pattern.test(value));
+}
+
+function containsMetaInstructionOutput(value: string): boolean {
+  let matches = 0;
+  for (const pattern of META_INSTRUCTION_PATTERNS) {
+    if (pattern.test(value)) {
+      matches += 1;
+    }
+    if (matches >= 2) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function normalizeProviderError(error: unknown): BackendError {

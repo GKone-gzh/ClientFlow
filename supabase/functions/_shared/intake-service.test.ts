@@ -156,6 +156,38 @@ test("instruction injection in business fields becomes a safe review fallback", 
   );
 });
 
+test("AI response protocol is not persisted as client requirements", async () => {
+  let persisted: AIExtractionResult | undefined;
+  const service = createServiceForProviderResult(
+    {
+      ...validResult,
+      project: { ...validResult.project, name: "待确认项目" },
+      requirements: [
+        { content: "区分共同已知和共同未知，不要重复询问。", sortOrder: 0 },
+        { content: "最多提出3个问题，并说明合理假设。", sortOrder: 1 },
+        { content: "设计最小实验和单一变量。", sortOrder: 2 },
+      ],
+      suggestedTasks: [],
+    },
+    (result) => {
+      persisted = result;
+    },
+  );
+
+  await service.requestExtraction(uploadId);
+
+  assert.equal(persisted?.project.name, "待确认项目");
+  assert.deepEqual(persisted?.requirements, [
+    { content: "需求待人工确认", sortOrder: 0 },
+  ]);
+  assert.deepEqual(persisted?.suggestedTasks, []);
+  assert.equal(persisted?.confidence, 0.1);
+  assert.deepEqual(persisted?.warnings, [
+    "截图包含与业务需求无关的指令性内容，已忽略，请人工复核。",
+  ]);
+  assert.doesNotMatch(JSON.stringify(persisted), /共同已知|合理假设|最小实验/);
+});
+
 test("provider failures mark both records failed and never report completion", async () => {
   const failureCodes: string[] = [];
   let completed = false;
