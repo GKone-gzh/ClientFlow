@@ -24,6 +24,11 @@
 - 可切换 Mock/Supabase Screenshot Upload Adapter，以及严格的 `prepare-upload -> signed private upload -> mark-uploaded` 边界。
 - 真实 Supabase private Storage smoke：对象存在、规范路径和 owner 匹配、状态为 `uploaded`、未签名 public URL 被拒绝。
 - Android 真机截图选择、压缩、上传和 `uploaded` 停止态验收；没有提前触发 AI extraction。
+- Supabase Intake Adapter 已将真实 `uploadId` 接入 `request-extraction`、`get-extraction` 和 `confirm-extraction`。
+- 服务端 Stub 输出经公共 Zod Schema 校验后进入 `needs_review`，Review 修改后由确认 RPC 原子创建业务实体。
+- Supabase Client/Project/Requirement/Task Repository 已提供主链路所需真实读写，Client Detail 读取真实实体图。
+- 真实 Supabase Intake smoke 已验证确认幂等和 User A/B 对 upload、extraction、client、project、requirement、task 的隔离。
+- Android 真机完整 Intake、Review、确认、跳转和真实客户详情验收通过。
 
 ## 当前配置
 
@@ -35,12 +40,12 @@
 ## 本阶段状态
 
 - Phase 2 P2 / Issue #4 已完成自动化、真实 Supabase 和 Android 真机验收，代码已 push 到 `main`，Issue 已关闭。
-- Phase 2 P3 / Issue #5 正在进行：Supabase Intake Adapter、真实业务 Repository 读取和 Review/Confirm 页面接线已完成本地自动化，等待真实 Supabase smoke 与 Android 真机全链路验收。
+- Phase 2 P3 / Issue #5 已完成自动化、真实 Supabase、User A/B 隔离和 Android 真机全链路验收，等待最终文档提交与 Issue 关闭。
 
 ## 下一步
 
-1. 部署并配置 `request-extraction`、`get-extraction`、`confirm-extraction`，运行真实 Supabase 完整 Intake smoke。
-2. 完成 Android 真机 Review、确认和真实 Client Detail 验收，再关闭 Issue #5。
+1. 关闭 Issue #5 后保持当前 MVP 边界，不自动开始真实 AI、正式 UI、支付、订阅或额外 CRM。
+2. 下一阶段需单独批准并建立 Issue；建议先确定真实 AI Provider 的安全评估、成本上限、超时/重试和数据保留策略，再接入任何付费模型。
 
 ## 环境限制
 
