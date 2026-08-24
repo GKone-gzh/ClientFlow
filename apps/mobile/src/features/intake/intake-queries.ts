@@ -5,18 +5,19 @@ import {
   type EntityId,
 } from "@clientflow/contracts";
 
-import { clientKeys } from "@/features/clients/client-queries";
 import { confirmIntakeWorkflow } from "@/features/intake/intake-workflow";
-import { taskKeys } from "@/features/tasks/task-queries";
+import {
+  clientKeys,
+  intakeKeys,
+  taskKeys,
+} from "@/features/query/query-keys";
+import { INTAKE_DETAIL_QUERY_POLICY } from "@/features/query/query-policy";
 import { useAppServices } from "@/services/app-service-provider";
-
-export const intakeKeys = {
-  detail: (extractionId: EntityId) => ["intake", extractionId] as const,
-};
 
 export function useExtractionResultQuery(extractionId: EntityId) {
   const services = useAppServices();
   return useQuery({
+    ...INTAKE_DETAIL_QUERY_POLICY,
     queryKey: intakeKeys.detail(extractionId),
     queryFn: () => services.intake.getValidatedResult(extractionId),
   });
@@ -33,8 +34,8 @@ export function useConfirmExtractionMutation(extractionId: EntityId) {
     onSuccess: async (state) => {
       if (state.status !== "confirmed") return;
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: clientKeys.all }),
-        queryClient.invalidateQueries({ queryKey: taskKeys.all }),
+        queryClient.invalidateQueries({ queryKey: clientKeys.lists() }),
+        queryClient.invalidateQueries({ queryKey: taskKeys.lists() }),
         queryClient.invalidateQueries({ queryKey: intakeKeys.detail(extractionId) }),
       ]);
     },
