@@ -1,27 +1,29 @@
 import { useQuery } from "@tanstack/react-query";
+import type {
+  CursorPage,
+  ListTasksInput,
+  Task,
+  TaskRepository,
+} from "@clientflow/contracts";
 
 import { useAppServices } from "@/services/app-service-provider";
 
 export const taskKeys = {
   all: ["tasks"] as const,
+  page: (input?: ListTasksInput) => ["tasks", "page", input ?? {}] as const,
 };
 
-export function useTasksQuery() {
+export async function loadTaskPage(
+  services: { tasks: Pick<TaskRepository, "list"> },
+  input?: ListTasksInput,
+): Promise<CursorPage<Task>> {
+  return services.tasks.list(input);
+}
+
+export function useTasksQuery(input?: ListTasksInput) {
   const services = useAppServices();
   return useQuery({
-    queryKey: taskKeys.all,
-    queryFn: async () => {
-      const clients = (await services.clients.list()).items;
-      const projectGroups = await Promise.all(
-        clients.map(async (client) =>
-          (await services.projects.listByClient(client.id)).items,
-        ),
-      );
-      const projects = projectGroups.flat();
-      const taskGroups = await Promise.all(
-        projects.map((project) => services.tasks.listByProject(project.id)),
-      );
-      return taskGroups.flat();
-    },
+    queryKey: taskKeys.page(input),
+    queryFn: async () => (await loadTaskPage(services, input)).items,
   });
 }
