@@ -4,7 +4,7 @@
 
 ## 当前 Phase
 
-**Phase 2.5 P1 / Issue #7：Production Security & Abuse Hardening（进行中）**
+**Phase 2.5 P1 / Issue #7：Production Security & Abuse Hardening（已完成）**
 
 唯一目标是在不增加业务功能的前提下，加固 Native Session、AI 防刷/并发/额度、usage、日志、生产组合边界、数据库权限和基础安全 CI。
 
@@ -58,11 +58,12 @@
 - 真实 Supabase 已完成 security migration 核验与五个 Edge Function 重部署；匿名畸形请求对五个函数均在 payload 解析前返回 `401`。
 - 真实 `qwen3-vl-plus` 主链路复测通过；`pnpm smoke:abuse` 已验证 User A 并发只产生一次 Provider 执行、User B 配额独立、同 upload 顺序重试幂等和跨用户读取拒绝。
 - 真实日额度验收返回 `quota_exceeded` 且 usage 数量不增加，证明 Provider 前拒绝；临时测试台账已清理，默认 `5/30/100` 配置已恢复。完整证据见 `docs/security-acceptance.md`。
+- Android 真机安全回归通过：SecureStore Session 重启恢复、快速连续 extraction 点击只产生一份结果、Review/confirm/真实 Client Detail、logout 后重启保持退出。
 
 ## 下一步
 
-1. 完成 Android 真机 SecureStore Session 恢复、真实 Qwen 主链路、快速连续 extraction 点击和 logout 后重启回归。
-2. Android 验收通过后更新 `docs/security-acceptance.md`、回写并关闭 Issue #7；CodeQL/Secret Protection 作为当前平台授权限制保留。
+1. 关闭 Issue #7，并保持当前生产安全门禁与依赖审计例外复审计划。
+2. 下一独立阶段建议在正式 Figma 交付后实施 UI，或单独规划数据查询性能与发布加固；本阶段不提前开始。
 
 ## 环境限制
 

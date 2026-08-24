@@ -60,12 +60,12 @@
 
 ## 8. Android 关闭门禁
 
-Issue #7 在以下 Android 真机回归完成前保持打开：
+2026-08-24 Android Expo Go 真机回归全部通过：
 
-1. 登录并彻底重启 App，Session 必须从 SecureStore 恢复。
-2. 上传测试截图并运行真实 Qwen extraction。
-3. 在 extraction 入口快速连续点击，不能产生多次付费调用或多份 extraction。
-4. Review、confirm 与 Client Detail 正常。
-5. logout 后彻底重启 App，必须保持未登录状态。
+1. 登录并彻底重启 App 后，Session 从 SecureStore 正常恢复并直接进入主页。
+2. 选择聊天截图后，真实 `qwen3-vl-plus` extraction 正常完成。
+3. 在“开始识别”入口快速连续点击，只产生一份识别结果，没有多份 extraction 或重复流程。
+4. Review、confirm 与真实 Client Detail 正常。
+5. logout 后彻底重启 App，保持未登录状态并进入登录页。
 
-完成上述检查后，更新本节、回写 Issue #7 并关闭 Issue。
+自动化、真实 Supabase、真实 Qwen、滥用控制和 Android 关闭门禁均已完成，Issue #7 可以关闭。
