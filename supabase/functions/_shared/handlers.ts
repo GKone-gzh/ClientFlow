@@ -143,8 +143,8 @@ function createJsonHandler<Input, Output>(
     }
 
     try {
-      const input = schema.parse(await readJson(request));
       const backend = await createBackend(request, { requestId });
+      const input = schema.parse(await readJson(request));
       const output = await action(backend, input);
       logger.log({ operation, requestId, status: "succeeded" });
       return jsonResponse(output, 200, requestId);

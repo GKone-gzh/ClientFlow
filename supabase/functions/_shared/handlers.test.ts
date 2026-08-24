@@ -31,7 +31,7 @@ const validResult: AIExtractionResult = {
   warnings: [],
 };
 
-test("prepare-upload validates input before calling the backend", async () => {
+test("prepare-upload validates input after constructing an authenticated backend", async () => {
   let backendCalls = 0;
   const handler = createPrepareUploadHandler(async () => {
     backendCalls += 1;
@@ -46,13 +46,34 @@ test("prepare-upload validates input before calling the backend", async () => {
   );
 
   assert.equal(response.status, 400);
-  assert.equal(backendCalls, 0);
+  assert.equal(backendCalls, 1);
   const requestId = response.headers.get("x-request-id");
   assertUuid(requestId);
   assert.deepEqual(await response.json(), {
     code: "validation_failed",
     details: { fields: ["mimeType"], requestId },
     message: "The request payload is invalid",
+    retryable: false,
+  });
+});
+
+test("authentication rejects malformed payloads before contract parsing", async () => {
+  const handler = createPrepareUploadHandler(async () => {
+    throw new BackendError({
+      code: "unauthenticated",
+      message: "A valid authenticated session is required",
+      status: 401,
+    });
+  });
+  const response = await handler(jsonRequest({ invalid: "payload" }));
+  const requestId = response.headers.get("x-request-id");
+
+  assert.equal(response.status, 401);
+  assertUuid(requestId);
+  assert.deepEqual(await response.json(), {
+    code: "unauthenticated",
+    details: { requestId },
+    message: "A valid authenticated session is required",
     retryable: false,
   });
 });

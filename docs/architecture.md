@@ -126,6 +126,7 @@ Supabase production composition 与 Mock composition 必须在创建阶段分离
 ## 9. 生产安全边界
 
 - 所有高价值 Edge Function 必须验证 Supabase Session；CORS 不是身份验证或授权边界。
+- Edge HTTP handler 必须先完成 Session 验证，再解析或校验业务 payload；匿名请求不能通过畸形输入探测合同或消耗业务解析路径。
 - Request correlation ID 只接受安全格式，否则由服务端生成；响应和结构化日志使用同一 ID。
 - 日志采用字段白名单，不序列化请求 headers/body、Provider raw response、SDK error 或 Secret。
 - Public env 只能包含明确允许的 Supabase public configuration 与 App adapter selector；疑似 service-role、AI Secret 或 admin token 必须在构建前失败。

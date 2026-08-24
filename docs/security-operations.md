@@ -9,7 +9,7 @@
 - `pnpm security:audit` 使用官方 npm registry 审计 production dependencies，并在 high/critical finding 时失败。
 - GitHub CI 将 Secret/public env 扫描与 production dependency audit 作为独立 job。
 - Dependabot 每周检查 pnpm workspace 和 GitHub Actions；安全更新按 production dependencies 分组。
-- `supabase/config.toml` 对五个客户端 Edge Function 显式设置 `verify_jwt = true`，安全测试拒绝任何 `verify_jwt = false`；函数内部仍会再次调用 Supabase Auth 验证 Session，CORS 不参与身份授权。
+- `supabase/config.toml` 对五个客户端 Edge Function 显式设置 `verify_jwt = true`，安全测试拒绝任何 `verify_jwt = false`；函数内部仍会先调用 Supabase Auth 验证 Session，再解析业务 payload，CORS 不参与身份授权。
 
 本地 `.env.local`、Supabase PAT、测试账号密码和 server secrets 必须保持 Git ignored。App 只允许 `EXPO_PUBLIC_APP_ADAPTER`、`EXPO_PUBLIC_SUPABASE_URL`、`EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` 三个 public env 名称。任何 `EXPO_PUBLIC_*` 值都视为可从客户端 bundle 读取。
 
