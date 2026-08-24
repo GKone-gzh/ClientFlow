@@ -4,11 +4,11 @@
 
 ## 当前 Phase
 
-**Phase 2.5 P1 / Issue #7：Production Security & Abuse Hardening（已完成）**
+**Phase 2.5 P2 / Issue #16：Data Performance & Mobile Foundation（规划完成，等待并行实现）**
 
-唯一目标是在不增加业务功能的前提下，加固 Native Session、AI 防刷/并发/额度、usage、日志、生产组合边界、数据库权限和基础安全 CI。
+唯一目标是在正式 Figma UI 接入前稳定 Backend Data Access、Pagination、Navigation、Safe Area、React Query、List Architecture 与 Screen State。
 
-第二个 AI Provider、自动模型路由、正式 Figma UI、支付订阅、性能重构和额外 CRM 功能不在当前范围。
+正式 Figma UI、视觉 Design Token、第二个 AI Provider、支付订阅、额外 CRM、App Integrity 和 R8 不在当前范围。
 
 ## 已完成
 
@@ -62,8 +62,8 @@
 
 ## 下一步
 
-1. 关闭 Issue #7，并保持当前生产安全门禁与依赖审计例外复审计划。
-2. 下一独立阶段建议在正式 Figma 交付后实施 UI，或单独规划数据查询性能与发布加固；本阶段不提前开始。
+1. 后端窗口在 `codex/backend-performance` 提交 Repository/Pagination/Batch 公共 Contract；Mobile 窗口在 `codex/mobile-foundation` 提交不依赖新 DTO 的 Navigation/Safe Area/Screen foundation。
+2. 总控按 `docs/phase-2.5-p2-integration-plan.md` Review 第一批提交，确认合并顺序后再开放第二批真实 query/list 接入。
 
 ## 环境限制
 
