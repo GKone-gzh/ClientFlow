@@ -18,16 +18,24 @@ import type {
   Task,
   Upload,
 } from "./models.ts";
+import type {
+  CursorPage,
+  CursorPageRequest,
+  ListTasksInput,
+} from "./pagination.ts";
 
 export interface ClientRepository {
-  list(): Promise<Client[]>;
+  list(input?: CursorPageRequest): Promise<CursorPage<Client>>;
   getById(id: EntityId): Promise<Client | null>;
   create(input: CreateClientInput): Promise<Client>;
   update(id: EntityId, input: UpdateClientInput): Promise<Client>;
 }
 
 export interface ProjectRepository {
-  listByClient(clientId: EntityId): Promise<Project[]>;
+  listByClient(
+    clientId: EntityId,
+    input?: CursorPageRequest,
+  ): Promise<CursorPage<Project>>;
   getById(id: EntityId): Promise<Project | null>;
   create(input: CreateProjectInput): Promise<Project>;
   update(id: EntityId, input: UpdateProjectInput): Promise<Project>;
@@ -35,10 +43,13 @@ export interface ProjectRepository {
 
 export interface RequirementRepository {
   listByProject(projectId: EntityId): Promise<Requirement[]>;
+  listByProjectIds(projectIds: readonly EntityId[]): Promise<Requirement[]>;
 }
 
 export interface TaskRepository {
+  list(input?: ListTasksInput): Promise<CursorPage<Task>>;
   listByProject(projectId: EntityId): Promise<Task[]>;
+  listByProjectIds(projectIds: readonly EntityId[]): Promise<Task[]>;
 }
 
 export interface UploadRepository {

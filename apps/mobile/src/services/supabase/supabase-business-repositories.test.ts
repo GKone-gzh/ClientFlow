@@ -71,7 +71,7 @@ const rows = {
 };
 
 test("loads a confirmed client graph through the real repository boundaries", async () => {
-  const { client, filters } = createReadClient(rows);
+  const { client, filters, queries } = createReadClient(rows);
   const repositories = createSupabaseBusinessRepositories(client);
 
   const detail = await loadClientDetail(repositories, CLIENT_ID);
@@ -80,13 +80,127 @@ test("loads a confirmed client graph through the real repository boundaries", as
   assert.equal(detail?.projects[0]?.project.name, "Launch site");
   assert.equal(detail?.projects[0]?.requirements[0]?.content, "Responsive page");
   assert.equal(detail?.projects[0]?.tasks[0]?.title, "Build layout");
-  assert.deepEqual(filters, [
-    ["clients", "id", CLIENT_ID],
-    ["projects", "client_id", CLIENT_ID],
-    ["requirements", "project_id", PROJECT_ID],
-    ["tasks", "project_id", PROJECT_ID],
+  assert.deepEqual(queries, ["clients", "projects", "requirements", "tasks"]);
+  assert.deepEqual(
+    filters.filter(([, column]) => column === "user_id"),
+    [
+      ["projects", "user_id", USER_ID],
+      ["requirements", "user_id", USER_ID],
+      ["tasks", "user_id", USER_ID],
+    ],
+  );
+});
+
+test("paginates clients and tasks with stable cursors and status filters", async () => {
+  const pageRows = {
+    ...rows,
+    clients: [
+      rows.clients[0]!,
+      { ...rows.clients[0]!, id: "00000000-0000-4000-8000-000000000907" },
+      { ...rows.clients[0]!, id: "00000000-0000-4000-8000-000000000908" },
+    ],
+    tasks: [
+      rows.tasks[0]!,
+      {
+        ...rows.tasks[0]!,
+        id: "00000000-0000-4000-8000-000000000905",
+        status: "blocked",
+      },
+      {
+        ...rows.tasks[0]!,
+        id: "00000000-0000-4000-8000-000000000906",
+        status: "blocked",
+      },
+    ],
+  };
+  const { client, filters } = createReadClient(pageRows);
+  const repositories = createSupabaseBusinessRepositories(client);
+
+  const first = await repositories.clients.list({ limit: 2 });
+  const second = await repositories.clients.list({
+    cursor: first.nextCursor,
+    limit: 2,
+  });
+  const blocked = await repositories.tasks.list({
+    limit: 1,
+    status: "blocked",
+  });
+  const nextBlocked = await repositories.tasks.list({
+    cursor: blocked.nextCursor,
+    limit: 1,
+    status: "blocked",
+  });
+
+  assert.deepEqual(
+    first.items.map(({ id }) => id),
+    [
+      "00000000-0000-4000-8000-000000000908",
+      "00000000-0000-4000-8000-000000000907",
+    ],
+  );
+  assert.deepEqual(second.items.map(({ id }) => id), [CLIENT_ID]);
+  assert.deepEqual(blocked.items.map(({ id }) => id), [
+    "00000000-0000-4000-8000-000000000906",
   ]);
-  assert.equal(filters.some(([, column]) => column === "user_id"), false);
+  assert.deepEqual(nextBlocked.items.map(({ id }) => id), [
+    "00000000-0000-4000-8000-000000000905",
+  ]);
+  assert.ok(
+    filters.some(
+      ([table, column, value]) =>
+        table === "tasks" && column === "status" && value === "blocked",
+    ),
+  );
+  assert.ok(
+    filters.some(
+      ([table, column, value]) =>
+        table === "tasks" && column === "user_id" && value === USER_ID,
+    ),
+  );
+});
+
+test("loads requirements and tasks for project ids in one query per table", async () => {
+  const secondProjectId = "00000000-0000-4000-8000-000000000912";
+  const { client, filters, queries } = createReadClient({
+    ...rows,
+    requirements: [
+      rows.requirements[0]!,
+      {
+        ...rows.requirements[0]!,
+        id: "00000000-0000-4000-8000-000000000913",
+        project_id: secondProjectId,
+      },
+    ],
+    tasks: [
+      rows.tasks[0]!,
+      {
+        ...rows.tasks[0]!,
+        id: "00000000-0000-4000-8000-000000000914",
+        project_id: secondProjectId,
+      },
+    ],
+  });
+  const repositories = createSupabaseBusinessRepositories(client);
+
+  const requirements = await repositories.requirements.listByProjectIds([
+    PROJECT_ID,
+    secondProjectId,
+  ]);
+  const tasks = await repositories.tasks.listByProjectIds([
+    PROJECT_ID,
+    secondProjectId,
+  ]);
+
+  assert.equal(requirements.length, 2);
+  assert.equal(tasks.length, 2);
+  assert.deepEqual(queries, ["requirements", "tasks"]);
+  assert.deepEqual(
+    filters.filter(([, column]) => column === "project_id"),
+    [
+      ["requirements", "project_id", [PROJECT_ID, secondProjectId]],
+      ["tasks", "project_id", [PROJECT_ID, secondProjectId]],
+    ],
+  );
 });
 
 test("requires a session and validates database rows", async () => {
@@ -112,17 +226,23 @@ function createReadClient(
   session: Session | null = { user: { id: USER_ID } } as Session,
 ) {
   const filters: [string, string, unknown][] = [];
+  const queries: string[] = [];
   const client = {
     auth: {
       getSession: async () => ({ data: { session }, error: null }),
     },
-    from: (table: string) => new FakeQuery(table, tableRows[table] ?? [], filters),
+    from: (table: string) => {
+      queries.push(table);
+      return new FakeQuery(table, tableRows[table] ?? [], filters);
+    },
   } as unknown as SupabaseClient;
-  return { client, filters };
+  return { client, filters, queries };
 }
 
 class FakeQuery implements PromiseLike<{ data: unknown; error: null }> {
   private filteredRows: Record<string, unknown>[];
+  private readonly orders: { ascending: boolean; column: string }[] = [];
+  private rowLimit: number | null = null;
 
   constructor(
     private readonly table: string,
@@ -142,26 +262,64 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: null }> {
     return this;
   }
 
-  order() {
+  in(column: string, values: readonly unknown[]) {
+    this.filters.push([this.table, column, [...values]]);
+    this.filteredRows = this.filteredRows.filter((row) =>
+      values.includes(row[column]),
+    );
+    return this;
+  }
+
+  or(expression: string) {
+    this.filters.push([this.table, "or", expression]);
+    const match =
+      /^(created_at|updated_at)\.lt\.([^,]+),and\(\1\.eq\.([^,]+),id\.lt\.([^)]+)\)$/.exec(
+        expression,
+      );
+    if (!match) throw new Error(`Unsupported fake or filter: ${expression}`);
+    const [, column, before, equal, id] = match;
+    this.filteredRows = this.filteredRows.filter(
+      (row) =>
+        String(row[column!]) < before! ||
+        (String(row[column!]) === equal && String(row.id) < id!),
+    );
+    return this;
+  }
+
+  order(column: string, options?: { ascending?: boolean }) {
+    this.orders.push({ ascending: options?.ascending ?? true, column });
     return this;
   }
 
   limit(limit: number) {
-    this.filteredRows = this.filteredRows.slice(0, limit);
+    this.rowLimit = limit;
     return this;
   }
 
   async maybeSingle() {
-    return { data: this.filteredRows[0] ?? null, error: null };
+    return { data: this.materialize()[0] ?? null, error: null };
   }
 
   then<TResult1 = { data: unknown; error: null }, TResult2 = never>(
     onfulfilled?: ((value: { data: unknown; error: null }) => TResult1 | PromiseLike<TResult1>) | null,
     onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
   ): PromiseLike<TResult1 | TResult2> {
-    return Promise.resolve({ data: this.filteredRows, error: null }).then(
+    return Promise.resolve({ data: this.materialize(), error: null }).then(
       onfulfilled,
       onrejected,
     );
+  }
+
+  private materialize() {
+    const ordered = this.filteredRows.toSorted((left, right) => {
+      for (const { ascending, column } of this.orders) {
+        const comparison = String(left[column]).localeCompare(
+          String(right[column]),
+        );
+        if (comparison !== 0) return ascending ? comparison : -comparison;
+      }
+      return 0;
+    });
+    return this.rowLimit === null ? ordered : ordered.slice(0, this.rowLimit);
   }
 }

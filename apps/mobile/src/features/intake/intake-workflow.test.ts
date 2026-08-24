@@ -215,7 +215,7 @@ test("makes confirmation idempotency visible without duplicating entities", asyn
     extracted.extractionId!,
   );
   assert.ok(result);
-  const beforeCount = (await composition.services.clients.list()).length;
+  const beforeCount = (await composition.services.clients.list()).items.length;
 
   const first = await confirmIntakeWorkflow({
     services: composition.services,
@@ -232,5 +232,8 @@ test("makes confirmation idempotency visible without duplicating entities", asyn
   assert.equal(first.replayed, false);
   assert.equal(replay.replayed, true);
   assert.deepEqual(replay.confirmation, first.confirmation);
-  assert.equal((await composition.services.clients.list()).length, beforeCount + 1);
+  assert.equal(
+    (await composition.services.clients.list()).items.length,
+    beforeCount + 1,
+  );
 });

@@ -15,6 +15,12 @@ import {
   UploadSchema,
 } from "./inputs.ts";
 import {
+  CursorPageRequestSchema,
+  ListTasksInputSchema,
+  decodeTimestampPageCursor,
+  encodeTimestampPageCursor,
+} from "./pagination.ts";
+import {
   AI_EXTRACTION_STATUSES,
   CLIENT_STATUSES,
   PROJECT_STATUSES,
@@ -214,4 +220,33 @@ test("public status values are unique across each domain", () => {
   ]) {
     assert.equal(new Set(statuses).size, statuses.length);
   }
+});
+
+test("validates bounded cursor page requests and task status filters", () => {
+  assert.equal(CursorPageRequestSchema.safeParse({ limit: 50 }).success, true);
+  assert.equal(CursorPageRequestSchema.safeParse({ limit: 0 }).success, false);
+  assert.equal(CursorPageRequestSchema.safeParse({ limit: 101 }).success, false);
+  assert.equal(
+    ListTasksInputSchema.safeParse({ limit: 25, status: "in_progress" })
+      .success,
+    true,
+  );
+  assert.equal(
+    ListTasksInputSchema.safeParse({ limit: 25, status: "completed" }).success,
+    false,
+  );
+});
+
+test("round-trips a versioned timestamp cursor with a stable id key", () => {
+  const value = {
+    version: 1,
+    sort: "updated_at",
+    timestamp: "2026-08-24T12:00:00.000Z",
+    id: "00000000-0000-4000-8000-000000000001",
+  } as const;
+
+  const cursor = encodeTimestampPageCursor(value);
+
+  assert.deepEqual(decodeTimestampPageCursor(cursor), value);
+  assert.equal(decodeTimestampPageCursor("not-a-cursor"), null);
 });

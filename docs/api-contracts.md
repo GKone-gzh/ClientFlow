@@ -52,10 +52,10 @@ interface AuthService {
 
 公共接口定义在 `interfaces.ts`。职责如下：
 
-- `ClientRepository`：当前用户的 client list/get/create/update。
-- `ProjectRepository`：按 client list、get/create/update。
-- `RequirementRepository`：按 project 有序读取 requirements。
-- `TaskRepository`：按 project 有序读取 tasks。
+- `ClientRepository`：当前用户的 cursor page/get/create/update。
+- `ProjectRepository`：按 client cursor page、get/create/update。
+- `RequirementRepository`：按单个或一组 project ID 有序读取 requirements。
+- `TaskRepository`：当前用户 cursor page，以及按单个或一组 project ID 有序读取 tasks。
 - `UploadRepository`：准备受限上传、读取 upload、上传完成确认。
 - `AIExtractionRepository`：读取 extraction、对已上传文件请求提取。
 
@@ -64,7 +64,11 @@ Repository 必须满足：
 - 返回领域模型，不把 Supabase row、HTTP response 或 SDK error 泄漏给 UI。
 - 找不到数据返回 `null`，授权失败返回标准错误，不能用空结果掩盖所有错误。
 - App Mock 和 Supabase 实现遵守相同接口和状态语义。
-- 列表 MVP 可先返回有上限的数组；引入分页前必须统一增加公共分页合同。
+- Client、Project 和当前用户 Task 列表统一返回 `CursorPage<T>`；Mock、Supabase 和 Feature 不得定义第二套分页 DTO。
+- Cursor 是不透明字符串，当前版本包含版本号、排序列、时间戳和 UUID secondary key。Client/Project 使用 `(updated_at desc, id desc)`；Task 使用 `(created_at desc, id desc)`。
+- 默认页大小集中在 contracts：Client 50、Project 25、Task 50；公共上限为 100。Repository 使用 `limit + 1` 判断 `nextCursor`，不能依赖静默 `.limit(200)` 表示完整结果。
+- Task page 可使用公共 `TaskStatus` 过滤；owner 仍由 Session 与 RLS 决定，分页输入不接受 `userId`。
+- Requirements/Tasks 批量 project ID 查询单次最多 50 个 ID，Feature 只对当前 Project page 执行批量读取。
 
 ## 6. Service 接口
 

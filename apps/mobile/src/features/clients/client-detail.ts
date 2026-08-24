@@ -10,7 +10,7 @@ export async function loadClientDetail(
   const client = await services.clients.getById(clientId);
   if (!client) return null;
 
-  const projects = await services.projects.listByClient(clientId);
+  const projects = (await services.projects.listByClient(clientId)).items;
   const projectDetails = await Promise.all(
     projects.map(async (project) => ({
       project,

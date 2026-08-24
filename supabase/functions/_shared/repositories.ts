@@ -1,21 +1,33 @@
-import type {
-  AIExtraction,
-  AIExtractionResult,
-  Client,
-  ClientRepository,
-  ConfirmExtractionInput,
-  ConfirmExtractionResult,
-  CreateClientInput,
-  CreateProjectInput,
-  EntityId,
-  Project,
-  ProjectRepository,
-  Requirement,
-  RequirementRepository,
-  Task,
-  TaskRepository,
-  UpdateClientInput,
-  UpdateProjectInput,
+import {
+  CLIENT_PAGE_SIZE,
+  CursorPageRequestSchema,
+  EntityIdSchema,
+  ListTasksInputSchema,
+  MAX_PROJECT_BATCH_SIZE,
+  PROJECT_PAGE_SIZE,
+  TASK_PAGE_SIZE,
+  decodeTimestampPageCursor,
+  encodeTimestampPageCursor,
+  type AIExtraction,
+  type AIExtractionResult,
+  type Client,
+  type ClientRepository,
+  type ConfirmExtractionInput,
+  type ConfirmExtractionResult,
+  type CreateClientInput,
+  type CreateProjectInput,
+  type CursorPage,
+  type CursorPageRequest,
+  type EntityId,
+  type ListTasksInput,
+  type Project,
+  type ProjectRepository,
+  type Requirement,
+  type RequirementRepository,
+  type Task,
+  type TaskRepository,
+  type UpdateClientInput,
+  type UpdateProjectInput,
 } from "@clientflow/contracts";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -28,19 +40,28 @@ import {
   mapTask,
 } from "./mappers.ts";
 
-const RECORD_LIMIT = 200;
-
 export class SupabaseClientRepository implements ClientRepository {
   constructor(private readonly client: SupabaseClient) {}
 
-  async list(): Promise<Client[]> {
-    const { data, error } = await this.client
+  async list(input?: CursorPageRequest): Promise<CursorPage<Client>> {
+    const page = requirePageInput(input, CLIENT_PAGE_SIZE, "updated_at");
+    let query = this.client
       .from("clients")
-      .select("*")
+      .select("*");
+    if (page.cursor) {
+      query = query.or(timestampCursorFilter("updated_at", page.cursor));
+    }
+    const { data, error } = await query
       .order("updated_at", { ascending: false })
-      .limit(RECORD_LIMIT);
+      .order("id", { ascending: false })
+      .limit(page.limit + 1);
     throwIfDatabaseError(error, "Unable to list clients");
-    return (data ?? []).map(mapClient);
+    return createCursorPage(
+      data,
+      mapClient,
+      page.limit,
+      "updated_at",
+    );
   }
 
   async getById(id: EntityId): Promise<Client | null> {
@@ -78,15 +99,29 @@ export class SupabaseClientRepository implements ClientRepository {
 export class SupabaseProjectRepository implements ProjectRepository {
   constructor(private readonly client: SupabaseClient) {}
 
-  async listByClient(clientId: EntityId): Promise<Project[]> {
-    const { data, error } = await this.client
+  async listByClient(
+    clientId: EntityId,
+    input?: CursorPageRequest,
+  ): Promise<CursorPage<Project>> {
+    const page = requirePageInput(input, PROJECT_PAGE_SIZE, "updated_at");
+    let query = this.client
       .from("projects")
       .select("*")
-      .eq("client_id", clientId)
+      .eq("client_id", clientId);
+    if (page.cursor) {
+      query = query.or(timestampCursorFilter("updated_at", page.cursor));
+    }
+    const { data, error } = await query
       .order("updated_at", { ascending: false })
-      .limit(RECORD_LIMIT);
+      .order("id", { ascending: false })
+      .limit(page.limit + 1);
     throwIfDatabaseError(error, "Unable to list projects");
-    return (data ?? []).map(mapProject);
+    return createCursorPage(
+      data,
+      mapProject,
+      page.limit,
+      "updated_at",
+    );
   }
 
   async getById(id: EntityId): Promise<Project | null> {
@@ -125,12 +160,21 @@ export class SupabaseRequirementRepository implements RequirementRepository {
   constructor(private readonly client: SupabaseClient) {}
 
   async listByProject(projectId: EntityId): Promise<Requirement[]> {
+    return this.listByProjectIds([projectId]);
+  }
+
+  async listByProjectIds(
+    projectIds: readonly EntityId[],
+  ): Promise<Requirement[]> {
+    const ids = requireProjectIds(projectIds);
+    if (ids.length === 0) return [];
     const { data, error } = await this.client
       .from("requirements")
       .select("*")
-      .eq("project_id", projectId)
+      .in("project_id", ids)
+      .order("project_id")
       .order("sort_order")
-      .limit(RECORD_LIMIT);
+      .order("id");
     throwIfDatabaseError(error, "Unable to list requirements");
     return (data ?? []).map(mapRequirement);
   }
@@ -139,13 +183,35 @@ export class SupabaseRequirementRepository implements RequirementRepository {
 export class SupabaseTaskRepository implements TaskRepository {
   constructor(private readonly client: SupabaseClient) {}
 
+  async list(input?: ListTasksInput): Promise<CursorPage<Task>> {
+    const page = requireTaskPageInput(input);
+    let query = this.client.from("tasks").select("*");
+    if (page.status) query = query.eq("status", page.status);
+    if (page.cursor) {
+      query = query.or(timestampCursorFilter("created_at", page.cursor));
+    }
+    const { data, error } = await query
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .limit(page.limit + 1);
+    throwIfDatabaseError(error, "Unable to list tasks");
+    return createCursorPage(data, mapTask, page.limit, "created_at");
+  }
+
   async listByProject(projectId: EntityId): Promise<Task[]> {
+    return this.listByProjectIds([projectId]);
+  }
+
+  async listByProjectIds(projectIds: readonly EntityId[]): Promise<Task[]> {
+    const ids = requireProjectIds(projectIds);
+    if (ids.length === 0) return [];
     const { data, error } = await this.client
       .from("tasks")
       .select("*")
-      .eq("project_id", projectId)
+      .in("project_id", ids)
+      .order("project_id")
       .order("sort_order")
-      .limit(RECORD_LIMIT);
+      .order("id");
     throwIfDatabaseError(error, "Unable to list tasks");
     return (data ?? []).map(mapTask);
   }
@@ -250,6 +316,94 @@ export interface AIUsageMetrics {
   durationMs: number;
   inputTokens: number | null;
   outputTokens: number | null;
+}
+
+interface TimestampedEntity {
+  createdAt: string;
+  id: EntityId;
+  updatedAt: string;
+}
+
+function createCursorPage<T extends TimestampedEntity>(
+  data: unknown,
+  mapper: (row: Record<string, unknown>) => T,
+  limit: number,
+  sort: "created_at" | "updated_at",
+): CursorPage<T> {
+  const rows = Array.isArray(data) ? data.map(mapper) : [];
+  const items = rows.slice(0, limit);
+  const last = items.at(-1);
+  return {
+    items,
+    nextCursor:
+      rows.length > limit && last
+        ? encodeTimestampPageCursor({
+            version: 1,
+            sort,
+            timestamp: sort === "created_at" ? last.createdAt : last.updatedAt,
+            id: last.id,
+          })
+        : null,
+  };
+}
+
+function requirePageInput(
+  input: CursorPageRequest | undefined,
+  defaultLimit: number,
+  sort: "created_at" | "updated_at",
+) {
+  const parsed = CursorPageRequestSchema.safeParse(input ?? {});
+  if (!parsed.success) throwValidation("Invalid pagination input");
+  return {
+    cursor: requireTimestampCursor(parsed.data.cursor, sort),
+    limit: parsed.data.limit ?? defaultLimit,
+  };
+}
+
+function requireTaskPageInput(input: ListTasksInput | undefined) {
+  const parsed = ListTasksInputSchema.safeParse(input ?? {});
+  if (!parsed.success) throwValidation("Invalid task pagination input");
+  return {
+    cursor: requireTimestampCursor(parsed.data.cursor, "created_at"),
+    limit: parsed.data.limit ?? TASK_PAGE_SIZE,
+    status: parsed.data.status,
+  };
+}
+
+function requireTimestampCursor(
+  value: string | null | undefined,
+  sort: "created_at" | "updated_at",
+) {
+  if (!value) return null;
+  const cursor = decodeTimestampPageCursor(value);
+  if (!cursor || cursor.sort !== sort) throwValidation("Invalid page cursor");
+  return cursor;
+}
+
+function timestampCursorFilter(
+  column: "created_at" | "updated_at",
+  cursor: { id: EntityId; timestamp: string },
+) {
+  return `${column}.lt.${cursor.timestamp},and(${column}.eq.${cursor.timestamp},id.lt.${cursor.id})`;
+}
+
+function requireProjectIds(projectIds: readonly EntityId[]): EntityId[] {
+  if (projectIds.length > MAX_PROJECT_BATCH_SIZE) {
+    throwValidation("Too many project ids");
+  }
+  const ids = [...new Set(projectIds)];
+  if (ids.some((id) => !EntityIdSchema.safeParse(id).success)) {
+    throwValidation("Invalid project id");
+  }
+  return ids;
+}
+
+function throwValidation(message: string): never {
+  throw new BackendError({
+    code: "validation_failed",
+    message,
+    status: 400,
+  });
 }
 
 export async function confirmExtractionTransaction(

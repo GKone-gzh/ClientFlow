@@ -11,9 +11,11 @@ export function useTasksQuery() {
   return useQuery({
     queryKey: taskKeys.all,
     queryFn: async () => {
-      const clients = await services.clients.list();
+      const clients = (await services.clients.list()).items;
       const projectGroups = await Promise.all(
-        clients.map((client) => services.projects.listByClient(client.id)),
+        clients.map(async (client) =>
+          (await services.projects.listByClient(client.id)).items,
+        ),
       );
       const projects = projectGroups.flat();
       const taskGroups = await Promise.all(

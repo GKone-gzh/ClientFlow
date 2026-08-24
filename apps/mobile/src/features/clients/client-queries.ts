@@ -13,7 +13,7 @@ export function useClientsQuery() {
   const services = useAppServices();
   return useQuery({
     queryKey: clientKeys.all,
-    queryFn: () => services.clients.list(),
+    queryFn: async () => (await services.clients.list()).items,
   });
 }
 
