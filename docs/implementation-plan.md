@@ -52,10 +52,11 @@
 - Public env 已拒绝 service-role、`sb_secret_`、AI Provider、DashScope 和 admin token 类配置；生产 Web smoke 显式验证 Supabase composition。
 - 新 migration 已增加 server-only AI rate-limit config、usage 台账与原子 reserve/complete/fail RPC。默认并发 1、滚动分钟 5、小时 30、24 小时 100；`authenticated` 无 private 表或 AI 状态 RPC 权限。
 - Edge Intake 已接入原子 reservation/complete/fail；Qwen 的实际 attempt count 和可靠 token usage 会进入 private usage。Provider 成功但完成写库不确定时保持 processing，不自动重复付费调用。
+- 所有高价值 Intake Edge Function 已统一 request correlation ID：只接受安全 UUID，否则服务端重新生成；同一 ID 贯穿运行时 reservation、响应头、错误详情和白名单结构化日志。日志不会序列化请求体、headers、截图、Provider raw response、SDK error 或 Secret。
 
 ## 下一步
 
-1. 增加 request ID、安全日志、权限攻击测试和基础 Security CI。
+1. 增加权限攻击测试、仓库 Secret 扫描、依赖审计和基础 Security CI。
 2. 部署并完成真实 Supabase、User A/B、额度、重复请求和 Android 真机全链路回归；全部通过后关闭 Issue #7。
 
 ## 环境限制

@@ -42,9 +42,15 @@ export function createRuntimeBackendFactory(
   );
   const provider = createServerAIProvider(getEnvironment);
 
-  return async (request) => {
+  return async (request, context) => {
     const session = await auth.requireSession(request);
-    return createFacade(admin, session.client, session.userId, provider);
+    return createFacade(
+      admin,
+      session.client,
+      session.userId,
+      provider,
+      context.requestId,
+    );
   };
 }
 
@@ -53,6 +59,7 @@ function createFacade(
   authenticatedClient: SupabaseClient,
   userId: string,
   provider: ServerAIProvider,
+  requestId: string,
 ): BackendFacade {
   const storage = new PrivateStorageUploadAdapter(admin);
   const uploads = new SupabaseUploadRepository(admin, storage, userId);
@@ -62,6 +69,8 @@ function createFacade(
     uploads,
     extractions,
     provider,
+    () => Date.now(),
+    () => requestId,
   );
 
   return {

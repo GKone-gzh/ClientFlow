@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { BackendFacade } from "./handlers";
+import type { BackendFacade, RequestContext } from "./handlers";
 import type { AIExtractionResult } from "@clientflow/contracts";
 import { BackendError } from "./errors";
 import {
@@ -47,9 +47,11 @@ test("prepare-upload validates input before calling the backend", async () => {
 
   assert.equal(response.status, 400);
   assert.equal(backendCalls, 0);
+  const requestId = response.headers.get("x-request-id");
+  assertUuid(requestId);
   assert.deepEqual(await response.json(), {
     code: "validation_failed",
-    details: { fields: ["mimeType"] },
+    details: { fields: ["mimeType"], requestId },
     message: "The request payload is invalid",
     retryable: false,
   });
@@ -72,6 +74,46 @@ test("prepare-upload returns the contracted private upload fields", async () => 
     uploadId,
   });
   assert.equal(response.headers.get("cache-control"), "no-store");
+  assertUuid(response.headers.get("x-request-id"));
+});
+
+test("request ids are validated and propagated to the backend and response", async () => {
+  const suppliedRequestId = "00000000-0000-4000-8000-000000000123";
+  let receivedContext: RequestContext | undefined;
+  const handler = createPrepareUploadHandler(async (_request, context) => {
+    receivedContext = context;
+    return createFacade();
+  });
+
+  const response = await handler(
+    jsonRequest(
+      {
+        byteSize: 1024,
+        mimeType: "image/png",
+        originalFileName: "brief.png",
+      },
+      { "x-request-id": suppliedRequestId.toUpperCase() },
+    ),
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("x-request-id"), suppliedRequestId);
+  assert.equal(receivedContext?.requestId, suppliedRequestId);
+
+  const invalidResponse = await handler(
+    jsonRequest(
+      {
+        byteSize: 1024,
+        mimeType: "image/png",
+        originalFileName: "brief.png",
+      },
+      { "x-request-id": "not-a-safe-request-id" },
+    ),
+  );
+  const generatedRequestId = invalidResponse.headers.get("x-request-id");
+  assertUuid(generatedRequestId);
+  assert.notEqual(generatedRequestId, "not-a-safe-request-id");
+  assert.equal(receivedContext?.requestId, generatedRequestId);
 });
 
 test("mark-uploaded accepts only an upload id and returns the verified upload", async () => {
@@ -157,18 +199,41 @@ test("HTTP boundary handles preflight, unsupported methods, and auth failures", 
 
   assert.equal(preflight.status, 204);
   assert.equal(preflight.headers.get("access-control-allow-origin"), "*");
+  assert.match(
+    preflight.headers.get("access-control-allow-headers") ?? "",
+    /x-request-id/,
+  );
+  assertUuid(preflight.headers.get("x-request-id"));
   assert.equal(unsupported.status, 405);
+  assertUuid(unsupported.headers.get("x-request-id"));
   assert.equal(unauthenticated.status, 401);
-  assert.equal((await unauthenticated.json()).code, "unauthenticated");
+  const unauthenticatedRequestId = unauthenticated.headers.get("x-request-id");
+  assertUuid(unauthenticatedRequestId);
+  assert.deepEqual(await unauthenticated.json(), {
+    code: "unauthenticated",
+    details: { requestId: unauthenticatedRequestId },
+    message: "A valid authenticated session is required",
+    retryable: false,
+  });
   assert.equal(backendCalls, 1);
 });
 
-function jsonRequest(body: unknown): Request {
+function jsonRequest(
+  body: unknown,
+  headers: Record<string, string> = {},
+): Request {
   return new Request("https://example.test/functions/v1/test", {
     body: JSON.stringify(body),
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...headers },
     method: "POST",
   });
+}
+
+function assertUuid(value: string | null): asserts value is string {
+  assert.match(
+    value ?? "",
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+  );
 }
 
 function createFacade(): BackendFacade {
