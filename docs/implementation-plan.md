@@ -4,7 +4,7 @@
 
 ## 当前 Phase
 
-**Phase 2.5 P2 / Issue #16：Data Performance & Mobile Foundation（规划完成，等待并行实现）**
+**Phase 2.5 P2 / Issue #16：Data Performance & Mobile Foundation（Backend 已完成，等待总控 Review）**
 
 唯一目标是在正式 Figma UI 接入前稳定 Backend Data Access、Pagination、Navigation、Safe Area、React Query、List Architecture 与 Screen State。
 
@@ -59,11 +59,16 @@
 - 真实 `qwen3-vl-plus` 主链路复测通过；`pnpm smoke:abuse` 已验证 User A 并发只产生一次 Provider 执行、User B 配额独立、同 upload 顺序重试幂等和跨用户读取拒绝。
 - 真实日额度验收返回 `quota_exceeded` 且 usage 数量不增加，证明 Provider 前拒绝；临时测试台账已清理，默认 `5/30/100` 配置已恢复。完整证据见 `docs/security-acceptance.md`。
 - Android 真机安全回归通过：SecureStore Session 重启恢复、快速连续 extraction 点击只产生一份结果、Review/confirm/真实 Client Detail、logout 后重启保持退出。
+- Backend 已建立统一 `CursorPage<T>` 合同：Client 50、Project 25、Task 50，cursor 使用版本化 timestamp + UUID secondary key；Mock 与 Supabase 使用同一接口。
+- Task 页面读取已从 `clients -> projects -> tasks` 扇出改为当前用户 Task page，一屏由 401 次最坏规模查询降为 1 次主要查询，继续由 RLS 强制 owner 隔离。
+- Client Detail 已改为 Client + Project page + Requirements batch + Tasks batch；首个项目页固定约 4 次查询，并由 Feature 按 projectId 组合。
+- `20260824000200_data_access_indexes.sql` 已增加 Client cursor、Task cursor 和 Task project batch 三条匹配索引；既有 migration、RLS、grants 和 AI quota 均未修改。
 
 ## 下一步
 
-1. 后端窗口在 `codex/backend-performance` 提交 Repository/Pagination/Batch 公共 Contract；Mobile 窗口在 `codex/mobile-foundation` 提交不依赖新 DTO 的 Navigation/Safe Area/Screen foundation。
-2. 总控按 `docs/phase-2.5-p2-integration-plan.md` Review 第一批提交，确认合并顺序后再开放第二批真实 query/list 接入。
+1. 总控 Review `codex/backend-performance` 的分页合同、直接 Task 查询、Client Detail batch、索引 migration 与安全回归。
+2. Mobile 窗口继续在 `codex/mobile-foundation` 使用公共 Repository DTO，不复制分页或 batch 类型。
+3. 总控按 `docs/phase-2.5-p2-integration-plan.md` 确认后端与 Mobile 分支集成顺序。
 
 ## 环境限制
 

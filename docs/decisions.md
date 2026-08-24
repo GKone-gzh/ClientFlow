@@ -103,3 +103,11 @@
 - 决策：Android/iOS Supabase Session 使用系统安全凭据存储，并以版本化分块 adapter 兼容大 Session；Web 保持平台独立 storage。AI 限流不使用 Edge 内存，而由 Postgres 在 Provider 调用前以用户级事务锁、usage 预约、同 upload 唯一约束和集中额度配置原子裁决。
 - 原因：移动端普通 AsyncStorage 不适合保存 refresh token；Edge Function 可水平扩展，进程内 rate limit 无法阻止并发绕过。同一请求在 Provider 成功后写库失败时也必须保守避免自动二次计费。
 - 后果：迁移完成后 Native AsyncStorage 不再保存 Auth Session；每用户默认并发 1，滚动 1 分钟/1 小时/24 小时额度为 5/30/100；所有已接受请求都先建立 server-only usage 记录。Supabase production composition 不初始化 Mock services，日志只使用安全字段白名单和 request ID。完整威胁模型见 `docs/threat-model.md`。
+
+## ADR-014：业务列表使用 Cursor Page 与批量子记录读取
+
+- 状态：Accepted
+- 日期：2026-08-24
+- 决策：Client、按 Client 的 Project、当前用户 Task 统一使用 `CursorPage<T>`；timestamp 排序必须携带 UUID secondary key。Task 直接从 owner task 集合读取，Client Detail 对当前 Project page 分别批量读取 requirements/tasks，再由 Feature 组合。
+- 原因：原 Task 链路在 100 clients、300 projects 时产生约 401 次数据库查询；Client Detail 为 `2 + 2P`。固定 `.limit(200)` 还会静默截断，不能表达下一页。
+- 后果：默认 page size 为 Client 50、Project 25、Task 50；Task 首屏为 1 次主要查询，Client Detail 首个项目页约 4 次查询。普通读取继续使用 authenticated Session 和 RLS，不引入 service-role 列表、RPC、GraphQL 或第二业务层。

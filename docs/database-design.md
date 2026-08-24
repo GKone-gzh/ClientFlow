@@ -49,7 +49,7 @@
 | `created_at` | `timestamptz` | not null default `now()` |
 | `updated_at` | `timestamptz` | not null default `now()` |
 
-约束和索引：`unique(id, user_id)`、`index(user_id, status, updated_at desc)`。
+约束和索引：`unique(id, user_id)`、`index(user_id, status, updated_at desc)`、`index(user_id, updated_at desc, id desc)`。最后一个索引服务不筛 status 的 Client cursor page。
 
 ### 3.3 `projects`
 
@@ -100,7 +100,7 @@
 | `created_at` | `timestamptz` | not null default `now()` |
 | `updated_at` | `timestamptz` | not null default `now()` |
 
-复合 FK 保证 project 和 requirement 同属当前 user/project。索引：`index(user_id, project_id, status, sort_order)`。
+复合 FK 保证 project 和 requirement 同属当前 user/project。索引：`index(user_id, project_id, status, sort_order)`、`index(user_id, created_at desc, id desc)`、`index(user_id, project_id, sort_order, id)`。后两者分别服务当前用户 Task cursor page 和 Client Detail project batch。
 
 ### 3.6 `uploads`
 
@@ -192,3 +192,4 @@ MVP 首个 schema **不创建 `raw_result` 列**。`result` 只允许保存通�
 - Schema 与 RLS 验证位于 `supabase/tests/database`；无 Docker 环境的 migration/RLS 回归测试位于 `supabase/tests/migration.test.mjs`。
 - Phase 2.5 只通过新 migration 增加 AI usage、集中额度配置和原子入口；不得修改已发布 migration。时间窗使用接受请求的 usage 记录计数，processing/completed/failed 均计入，因为它们都可能已产生 Provider 成本。
 - `20260824000100_ai_abuse_controls.sql` 已新增 `private.ai_rate_limit_config`、`private.ai_usage` 及 service-role-only `reserve_ai_extraction`、`complete_ai_extraction`、`fail_ai_extraction`。普通 `authenticated` 无 private 表权限和上述 RPC 执行权限。
+- `20260824000200_data_access_indexes.sql` 仅增加 Client/Task cursor 与 Task project batch 索引；不修改 RLS、grant、AI usage、quota 或 service-role RPC。
