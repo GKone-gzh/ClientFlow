@@ -5,6 +5,7 @@ import {
   runSupabaseIntakeSmoke,
 } from "./supabase-intake-smoke";
 import { loadSmokeEnvironment } from "./smoke-env";
+import { isContractErrorShape } from "../src/services/service-error";
 
 async function main() {
   loadSmokeEnvironment([
@@ -31,13 +32,7 @@ async function main() {
     });
     console.log(JSON.stringify({ check: "supabase-qwen-intake", ...result }));
   } catch (error) {
-    const safeError =
-      error instanceof IntakeSmokeError
-        ? error
-        : new IntakeSmokeError(
-            "qwen_smoke_failed",
-            "Unexpected Qwen smoke failure.",
-          );
+    const safeError = toSafeQwenSmokeError(error);
     console.error(
       JSON.stringify({
         check: "supabase-qwen-intake",
@@ -48,6 +43,17 @@ async function main() {
     );
     process.exitCode = 1;
   }
+}
+
+export function toSafeQwenSmokeError(error: unknown): IntakeSmokeError {
+  if (error instanceof IntakeSmokeError) return error;
+  if (isContractErrorShape(error)) {
+    return new IntakeSmokeError(error.code, error.message);
+  }
+  return new IntakeSmokeError(
+    "qwen_smoke_failed",
+    "Unexpected Qwen smoke failure.",
+  );
 }
 
 export function resolveQwenSmokeImage(

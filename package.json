@@ -8,6 +8,7 @@
     "lint": "pnpm run lint:root && pnpm run lint:boundaries && pnpm -r --if-present lint",
     "lint:boundaries": "node scripts/check-app-boundaries.mjs",
     "lint:root": "eslint packages/contracts/src supabase/functions/_shared supabase/tests/migration.test.mjs scripts",
+    "smoke:abuse": "pnpm --filter @clientflow/mobile smoke:abuse",
     "smoke:auth": "pnpm --filter @clientflow/mobile smoke:auth",
     "smoke:intake": "pnpm --filter @clientflow/mobile smoke:intake",
     "smoke:qwen": "pnpm --filter @clientflow/mobile smoke:qwen",

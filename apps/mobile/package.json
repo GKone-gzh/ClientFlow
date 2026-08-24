@@ -41,6 +41,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "smoke:auth": "tsx scripts/supabase-auth-smoke.ts",
+    "smoke:abuse": "tsx scripts/supabase-abuse-smoke.ts",
     "smoke:intake": "tsx scripts/supabase-intake-smoke.ts",
     "smoke:qwen": "tsx scripts/supabase-qwen-smoke.ts",
     "smoke:qwen:accuracy": "tsx scripts/supabase-qwen-accuracy.ts",
