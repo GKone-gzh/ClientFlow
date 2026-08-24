@@ -54,11 +54,12 @@
 - Edge Intake 已接入原子 reservation/complete/fail；Qwen 的实际 attempt count 和可靠 token usage 会进入 private usage。Provider 成功但完成写库不确定时保持 processing，不自动重复付费调用。
 - 所有高价值 Intake Edge Function 已统一 request correlation ID：只接受安全 UUID，否则服务端重新生成；同一 ID 贯穿运行时 reservation、响应头、错误详情和白名单结构化日志。日志不会序列化请求体、headers、截图、Provider raw response、SDK error 或 Secret。
 - Security CI 已增加 tracked-file Secret/public env 扫描、production dependency audit 和 Dependabot；数据库回归覆盖普通用户越权读取 usage、修改额度及调用完成/失败 RPC。当前唯一依赖审计例外是尚无已发布补丁的 Metro `image-size` build-time DoS，范围、缓解和复审日期记录于 `docs/security-operations.md`。
+- GitHub Dependency graph/Dependabot alerts 与 security updates 已启用并通过 API 复核。当前私有仓库没有可用的 CodeQL/default setup、Secret scanning 或 push protection 授权，平台 API 返回不可用状态，未虚报为已启用。
 
 ## 下一步
 
 1. 部署并完成真实 Supabase、User A/B、额度、重复请求和 Android 真机全链路回归。
-2. 核验 GitHub 可用的 Advanced Security 设置；全部通过后关闭 Issue #7。
+2. 全部真实环境与 Android 验收通过后关闭 Issue #7；CodeQL/Secret Protection 作为当前平台授权限制保留。
 
 ## 环境限制
 

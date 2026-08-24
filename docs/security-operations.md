@@ -32,9 +32,9 @@ Registry advisory 要求 `image-size >=2.0.3`，但该版本尚未发布，因�
 
 ## GitHub 平台设置
 
-仓库内已配置 CI 与 Dependabot。仓库所有者还应在 GitHub `Settings -> Advanced Security` 中启用可用的 Dependency graph、Dependabot alerts、Dependabot security updates、Secret scanning/push protection 与 CodeQL/default setup。
+仓库内已配置 CI 与 Dependabot。2026-08-24 已通过 GitHub REST API 启用并复核 Dependency graph/Dependabot alerts 与 Dependabot security updates；`dependabot.yml` 位于默认分支并负责版本更新计划。
 
-私有仓库的 Secret scanning、push protection 和 CodeQL 可用性取决于账户或组织的 GitHub Code Security/Secret Protection 授权。未在仓库设置中确认启用前，不得报告为已启用；本地扫描和 CI 不能替代 GitHub 原生历史扫描与 push protection。
+当前私有仓库的 CodeQL/default setup API 返回 `403`，repository security analysis 中 Secret scanning 与 push protection 状态不可用。它们取决于账户或组织的 GitHub Code Security/Secret Protection 授权，因此本阶段未启用且不得报告为已启用。项目所有者以后购买或获得相应授权后，应在 GitHub `Settings -> Advanced Security` 启用 CodeQL/default setup、Secret scanning 与 push protection；本地扫描和 CI 不能替代 GitHub 原生历史扫描与 push protection。
 
 ## 事件处理
 
