@@ -6,6 +6,10 @@ export interface ClientDetailNavigator {
   push(href: ClientDetailHref): void;
 }
 
+export interface IntakeCompletionNavigator extends ClientDetailNavigator {
+  dismissAll(): void;
+}
+
 export function clientDetailHref(clientId: EntityId): ClientDetailHref {
   return `/(app)/clients/${clientId}`;
 }
@@ -15,4 +19,12 @@ export function pushClientDetail(
   clientId: EntityId,
 ) {
   navigator.push(clientDetailHref(clientId));
+}
+
+export function completeIntakeNavigation(
+  navigator: IntakeCompletionNavigator,
+  clientId: EntityId,
+) {
+  navigator.dismissAll();
+  pushClientDetail(navigator, clientId);
 }

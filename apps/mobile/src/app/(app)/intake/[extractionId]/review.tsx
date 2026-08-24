@@ -14,6 +14,7 @@ import {
   useConfirmExtractionMutation,
   useExtractionResultQuery,
 } from "@/features/intake/intake-queries";
+import { completeIntakeNavigation } from "@/features/navigation/client-navigation";
 import { useIntakeFlowStore } from "@/store/intake-flow-store";
 
 const EMPTY_RESULT: AIExtractionResult = {
@@ -53,7 +54,7 @@ export default function IntakeReviewScreen() {
       onSuccess: (state) => {
         if (state.status !== "confirmed" || !state.confirmation) return;
         resetIntake();
-        router.replace(`/(app)/clients/${state.confirmation.clientId}`);
+        completeIntakeNavigation(router, state.confirmation.clientId);
       },
     });
   });

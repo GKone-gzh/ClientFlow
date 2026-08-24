@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   clientDetailHref,
+  completeIntakeNavigation,
   pushClientDetail,
   type ClientDetailHref,
 } from "./client-navigation";
@@ -20,6 +21,10 @@ class MemoryStack {
 
   back() {
     if (this.routes.length > 1) this.routes.pop();
+  }
+
+  dismissAll() {
+    this.routes.splice(1);
   }
 }
 
@@ -47,5 +52,30 @@ test("returns to Clients after pushing a client detail", () => {
   pushClientDetail(stack, CLIENT_ID);
   stack.back();
 
+  assert.deepEqual(stack.routes, ["/(app)/(tabs)/clients"]);
+});
+
+test("removes completed intake routes and returns detail back to Home", () => {
+  const stack = new MemoryStack("/(app)/(tabs)/home");
+  stack.routes.push("/(app)/intake/upload", "/(app)/intake/extraction/review");
+
+  completeIntakeNavigation(stack, CLIENT_ID);
+  stack.back();
+
+  assert.deepEqual(stack.routes, ["/(app)/(tabs)/home"]);
+});
+
+test("preserves the Clients tab beneath a confirmed intake detail", () => {
+  const stack = new MemoryStack("/(app)/(tabs)/clients");
+  stack.routes.push("/(app)/intake/upload", "/(app)/intake/extraction/review");
+
+  completeIntakeNavigation(stack, CLIENT_ID);
+  completeIntakeNavigation(stack, CLIENT_ID);
+
+  assert.deepEqual(stack.routes, [
+    "/(app)/(tabs)/clients",
+    `/(app)/clients/${CLIENT_ID}`,
+  ]);
+  stack.back();
   assert.deepEqual(stack.routes, ["/(app)/(tabs)/clients"]);
 });
