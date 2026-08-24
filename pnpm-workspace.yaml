@@ -3,5 +3,16 @@ packages:
   - packages/*
   - supabase/functions
 
+overrides:
+  "ansi-regex@>=4.0.0 <4.1.1": 4.1.1
+
+audit:
+  level: high
+  ignore:
+    # Metro build-time parser; no patched image-size release exists yet.
+    # See docs/security-operations.md for scope, mitigation, and review date.
+    - GHSA-w3rx-r6r6-pgpr
+    - GHSA-5p2g-fcmc-qvqq
+
 allowBuilds:
   esbuild: true

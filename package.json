@@ -15,11 +15,15 @@
     "smoke:storage": "pnpm --filter @clientflow/mobile smoke:storage",
     "smoke:http": "pnpm --filter @clientflow/backend-core test:http",
     "smoke:mobile": "node scripts/mobile-web-smoke.mjs",
-    "test": "pnpm run test:contracts-db && pnpm run test:db && pnpm -r --if-present test",
+    "security": "pnpm run security:secrets && pnpm run security:audit",
+    "security:audit": "pnpm audit --prod --registry=https://registry.npmjs.org",
+    "security:secrets": "node scripts/security-secret-scan.mjs",
+    "test": "pnpm run test:contracts-db && pnpm run test:security && pnpm run test:db && pnpm -r --if-present test",
     "test:contracts-db": "node --test scripts/contract-db-parity.test.mjs",
     "test:db": "node --test supabase/tests/migration.test.mjs",
+    "test:security": "node --test scripts/security-secret-scan.test.mjs",
     "typecheck": "pnpm -r --if-present typecheck",
-    "verify": "pnpm lint && pnpm typecheck && pnpm test"
+    "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm security:secrets"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.5",

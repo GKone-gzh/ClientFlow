@@ -994,6 +994,36 @@ test("AI reservations are server-only, concurrent-safe, and user-isolated", asyn
       db.query("select * from private.ai_usage"),
       /permission denied/i,
     );
+    await assert.rejects(
+      db.query("update private.ai_rate_limit_config set minute_limit = 999"),
+      /permission denied/i,
+    );
+    await assert.rejects(
+      db.query(
+        `select * from public.complete_ai_extraction(
+          '${userA}'::uuid,
+          '${uploadA1}'::uuid,
+          '${JSON.stringify(validExtractionResult)}'::jsonb,
+          1,
+          1,
+          null,
+          null
+        )`,
+      ),
+      /permission denied/i,
+    );
+    await assert.rejects(
+      db.query(
+        `select * from public.fail_ai_extraction(
+          '${userA}'::uuid,
+          '${uploadA1}'::uuid,
+          'forged_failure',
+          1,
+          1
+        )`,
+      ),
+      /permission denied/i,
+    );
   } finally {
     await db.close();
   }
