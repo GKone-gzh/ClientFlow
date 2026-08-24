@@ -1,7 +1,9 @@
 # Phase 2.5 P2 Integration Plan
 
-最后更新：2026-08-24  
-GitHub Issue：[#16](https://github.com/GKone-gzh/ClientFlow/issues/16)  
+最后更新：2026-08-24
+
+GitHub Issue：[#16](https://github.com/GKone-gzh/ClientFlow/issues/16)
+
 阶段：Data Performance & Mobile Foundation
 
 ## 1. 目标与非目标
