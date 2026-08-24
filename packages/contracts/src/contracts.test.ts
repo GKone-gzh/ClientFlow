@@ -14,12 +14,13 @@ import {
   RequestExtractionInputSchema,
   UploadSchema,
 } from "./inputs.ts";
-import {
-  CursorPageRequestSchema,
-  ListTasksInputSchema,
-  decodeTimestampPageCursor,
-  encodeTimestampPageCursor,
-} from "./pagination.ts";
+import type {
+  ClientPageRepository,
+  ProjectPageRepository,
+  RequirementBatchRepository,
+  TaskBatchRepository,
+  TaskPageRepository,
+} from "./interfaces.ts";
 import {
   AI_EXTRACTION_STATUSES,
   CLIENT_STATUSES,
@@ -27,6 +28,20 @@ import {
   TASK_STATUSES,
   UPLOAD_STATUSES,
 } from "./statuses.ts";
+import {
+  CLIENT_PAGE_SIZE,
+  CursorPageRequestSchema,
+  ListTasksInputSchema,
+  MAX_PROJECT_BATCH_SIZE,
+  PROJECT_PAGE_SIZE,
+  ProjectBatchInputSchema,
+  TASK_PAGE_SIZE,
+  TimestampPageCursorSchema,
+  createCursorPageSchema,
+  decodeTimestampPageCursor,
+  encodeTimestampPageCursor,
+} from "./pagination.ts";
+import { TaskListItemSchema } from "./read-models.ts";
 
 const validExtraction = {
   schemaVersion: 1,
@@ -222,7 +237,13 @@ test("public status values are unique across each domain", () => {
   }
 });
 
-test("validates bounded cursor page requests and task status filters", () => {
+test("validates bounded page, task filter, and project batch inputs", () => {
+  const projectId = "00000000-0000-4000-8000-000000000001";
+
+  assert.deepEqual(
+    [CLIENT_PAGE_SIZE, PROJECT_PAGE_SIZE, TASK_PAGE_SIZE],
+    [50, 25, 50],
+  );
   assert.equal(CursorPageRequestSchema.safeParse({ limit: 50 }).success, true);
   assert.equal(CursorPageRequestSchema.safeParse({ limit: 0 }).success, false);
   assert.equal(CursorPageRequestSchema.safeParse({ limit: 101 }).success, false);
@@ -235,12 +256,38 @@ test("validates bounded cursor page requests and task status filters", () => {
     ListTasksInputSchema.safeParse({ limit: 25, status: "completed" }).success,
     false,
   );
+  assert.equal(
+    ProjectBatchInputSchema.safeParse({ projectIds: [projectId] }).success,
+    true,
+  );
+  assert.equal(
+    ProjectBatchInputSchema.safeParse({ projectIds: [projectId, projectId] })
+      .success,
+    false,
+  );
+  assert.equal(
+    ProjectBatchInputSchema.safeParse({
+      projectIds: Array.from(
+        { length: MAX_PROJECT_BATCH_SIZE + 1 },
+        (_, index) =>
+          `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+      ),
+    }).success,
+    false,
+  );
+  assert.equal(
+    ProjectBatchInputSchema.safeParse({ projectIds: [], userId: projectId })
+      .success,
+    false,
+  );
 });
 
-test("round-trips a versioned timestamp cursor with a stable id key", () => {
+test("round-trips a query-bound timestamp cursor with a stable id key", () => {
   const value = {
     version: 1,
-    sort: "updated_at",
+    resource: "tasks",
+    order: "created_at",
+    scope: "in_progress",
     timestamp: "2026-08-24T12:00:00.000Z",
     id: "00000000-0000-4000-8000-000000000001",
   } as const;
@@ -249,4 +296,116 @@ test("round-trips a versioned timestamp cursor with a stable id key", () => {
 
   assert.deepEqual(decodeTimestampPageCursor(cursor), value);
   assert.equal(decodeTimestampPageCursor("not-a-cursor"), null);
+  assert.equal(
+    TimestampPageCursorSchema.safeParse({ ...value, id: "not-a-uuid" })
+      .success,
+    false,
+  );
+  assert.equal(
+    TimestampPageCursorSchema.safeParse({ ...value, order: "updated_at" })
+      .success,
+    false,
+  );
+  assert.equal(
+    TimestampPageCursorSchema.safeParse({
+      ...value,
+      resource: "projects",
+      order: "updated_at",
+      scope: "in_progress",
+    }).success,
+    false,
+  );
+});
+
+test("validates the shared task list read model and cursor page envelope", () => {
+  const userId = "00000000-0000-4000-8000-000000000001";
+  const projectId = "00000000-0000-4000-8000-000000000002";
+  const item = {
+    id: "00000000-0000-4000-8000-000000000003",
+    userId,
+    projectId,
+    requirementId: null,
+    title: "Prepare estimate",
+    description: null,
+    dueAt: null,
+    sortOrder: 0,
+    status: "todo",
+    createdAt: "2026-08-24T12:00:00.000Z",
+    updatedAt: "2026-08-24T12:00:00.000Z",
+    clientId: "00000000-0000-4000-8000-000000000004",
+    clientName: "Acme",
+    projectName: "Landing page",
+  };
+  const pageSchema = createCursorPageSchema(TaskListItemSchema);
+
+  assert.equal(TaskListItemSchema.safeParse(item).success, true);
+  assert.equal(
+    pageSchema.safeParse({ items: [item], nextCursor: null }).success,
+    true,
+  );
+  assert.equal(
+    TaskListItemSchema.safeParse({
+      ...item,
+      project_name: item.projectName,
+    }).success,
+    false,
+  );
+});
+
+test("keeps empty pages stable for Mock and Supabase contract consumers", () => {
+  const pageSchema = createCursorPageSchema(TaskListItemSchema);
+  const emptyPage = { items: [], nextCursor: null };
+
+  assert.deepEqual(pageSchema.parse(emptyPage), emptyPage);
+  assert.equal(
+    pageSchema.safeParse({ items: [], nextCursor: undefined }).success,
+    false,
+  );
+});
+
+test("gives Mock and Supabase adapters one repository capability surface", async () => {
+  const emptyPage = { items: [], nextCursor: null };
+  type AdapterContract = {
+    clients: ClientPageRepository;
+    projects: ProjectPageRepository;
+    requirements: RequirementBatchRepository;
+    tasks: TaskPageRepository & TaskBatchRepository;
+  };
+  const createAdapterContract = (): AdapterContract => ({
+    clients: {
+      listPage: async () => emptyPage,
+    },
+    projects: {
+      listPageByClient: async () => emptyPage,
+    },
+    requirements: {
+      listByProjectIds: async () => [],
+    },
+    tasks: {
+      listPage: async () => emptyPage,
+      listByProjectIds: async () => [],
+    },
+  });
+  const mock = createAdapterContract();
+  const supabase = createAdapterContract();
+  const batchInput = { projectIds: [] };
+
+  assert.deepEqual(await mock.clients.listPage(), await supabase.clients.listPage());
+  assert.deepEqual(
+    await mock.projects.listPageByClient(
+      "00000000-0000-4000-8000-000000000001",
+    ),
+    await supabase.projects.listPageByClient(
+      "00000000-0000-4000-8000-000000000001",
+    ),
+  );
+  assert.deepEqual(await mock.tasks.listPage(), await supabase.tasks.listPage());
+  assert.deepEqual(
+    await mock.requirements.listByProjectIds(batchInput),
+    await supabase.requirements.listByProjectIds(batchInput),
+  );
+  assert.deepEqual(
+    await mock.tasks.listByProjectIds(batchInput),
+    await supabase.tasks.listByProjectIds(batchInput),
+  );
 });

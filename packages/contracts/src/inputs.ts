@@ -225,7 +225,7 @@ export const RequirementSchema: z.ZodType<Requirement> = z
   })
   .strict();
 
-export const TaskSchema: z.ZodType<Task> = z
+export const TaskSchema = z
   .object({
     id: EntityIdSchema,
     userId: EntityIdSchema,
@@ -239,4 +239,4 @@ export const TaskSchema: z.ZodType<Task> = z
     createdAt: ISODateTimeSchema,
     updatedAt: ISODateTimeSchema,
   })
-  .strict();
+  .strict() satisfies z.ZodType<Task>;

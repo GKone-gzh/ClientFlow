@@ -22,20 +22,19 @@ import type {
   CursorPage,
   CursorPageRequest,
   ListTasksInput,
+  ProjectBatchInput,
 } from "./pagination.ts";
+import type { TaskListItem } from "./read-models.ts";
 
 export interface ClientRepository {
-  list(input?: CursorPageRequest): Promise<CursorPage<Client>>;
+  list(): Promise<Client[]>;
   getById(id: EntityId): Promise<Client | null>;
   create(input: CreateClientInput): Promise<Client>;
   update(id: EntityId, input: UpdateClientInput): Promise<Client>;
 }
 
 export interface ProjectRepository {
-  listByClient(
-    clientId: EntityId,
-    input?: CursorPageRequest,
-  ): Promise<CursorPage<Project>>;
+  listByClient(clientId: EntityId): Promise<Project[]>;
   getById(id: EntityId): Promise<Project | null>;
   create(input: CreateProjectInput): Promise<Project>;
   update(id: EntityId, input: UpdateProjectInput): Promise<Project>;
@@ -43,13 +42,35 @@ export interface ProjectRepository {
 
 export interface RequirementRepository {
   listByProject(projectId: EntityId): Promise<Requirement[]>;
-  listByProjectIds(projectIds: readonly EntityId[]): Promise<Requirement[]>;
 }
 
 export interface TaskRepository {
-  list(input?: ListTasksInput): Promise<CursorPage<Task>>;
   listByProject(projectId: EntityId): Promise<Task[]>;
-  listByProjectIds(projectIds: readonly EntityId[]): Promise<Task[]>;
+}
+
+// Batch 1 capability contracts are separate from the existing repositories so
+// adapters and Features can adopt them together after architecture review.
+export interface ClientPageRepository {
+  listPage(input?: CursorPageRequest): Promise<CursorPage<Client>>;
+}
+
+export interface ProjectPageRepository {
+  listPageByClient(
+    clientId: EntityId,
+    input?: CursorPageRequest,
+  ): Promise<CursorPage<Project>>;
+}
+
+export interface TaskPageRepository {
+  listPage(input?: ListTasksInput): Promise<CursorPage<TaskListItem>>;
+}
+
+export interface RequirementBatchRepository {
+  listByProjectIds(input: ProjectBatchInput): Promise<Requirement[]>;
+}
+
+export interface TaskBatchRepository {
+  listByProjectIds(input: ProjectBatchInput): Promise<Task[]>;
 }
 
 export interface UploadRepository {

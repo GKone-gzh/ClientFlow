@@ -1,25 +1,14 @@
 import {
-  CLIENT_PAGE_SIZE,
   ClientSchema,
-  CursorPageRequestSchema,
   EntityIdSchema,
-  ListTasksInputSchema,
-  MAX_PROJECT_BATCH_SIZE,
-  PROJECT_PAGE_SIZE,
   ProjectSchema,
   RequirementSchema,
-  TASK_PAGE_SIZE,
   TaskSchema,
-  decodeTimestampPageCursor,
-  encodeTimestampPageCursor,
   type Client,
   type ClientRepository,
   type CreateClientInput,
   type CreateProjectInput,
-  type CursorPage,
-  type CursorPageRequest,
   type EntityId,
-  type ListTasksInput,
   type Project,
   type ProjectRepository,
   type Requirement,
@@ -37,6 +26,7 @@ import {
   requireSupabaseSession,
 } from "@/services/supabase/supabase-adapter-utils";
 
+const RECORD_LIMIT = 200;
 const CLIENT_COLUMNS =
   "id,user_id,name,contact_handle,contact_channel,notes,status,created_at,updated_at";
 const PROJECT_COLUMNS =
@@ -64,28 +54,15 @@ export function createSupabaseBusinessRepositories(client: SupabaseClient) {
 export class SupabaseClientRepository implements ClientRepository {
   constructor(private readonly client: SupabaseClient) {}
 
-  async list(input?: CursorPageRequest): Promise<CursorPage<Client>> {
-    const page = requirePageInput(input, CLIENT_PAGE_SIZE, "updated_at");
-    const session = await requireSupabaseSession(this.client);
-    let query = this.client
+  async list(): Promise<Client[]> {
+    await requireSupabaseSession(this.client);
+    const { data, error } = await this.client
       .from("clients")
       .select(CLIENT_COLUMNS)
-      .eq("user_id", session.user.id);
-    if (page.cursor) {
-      query = query.or(timestampCursorFilter("updated_at", page.cursor));
-    }
-    const { data, error } = await query
       .order("updated_at", { ascending: false })
-      .order("id", { ascending: false })
-      .limit(page.limit + 1);
+      .limit(RECORD_LIMIT);
     throwIfDatabaseError(error, "无法读取客户列表，请稍后重试。");
-    return createCursorPage(
-      data,
-      mapClientRow,
-      page.limit,
-      "updated_at",
-      "客户服务返回了无效记录。",
-    );
+    return parseRows(data, mapClientRow, "客户服务返回了无效记录。");
   }
 
   async getById(id: EntityId): Promise<Client | null> {
@@ -128,33 +105,17 @@ export class SupabaseClientRepository implements ClientRepository {
 export class SupabaseProjectRepository implements ProjectRepository {
   constructor(private readonly client: SupabaseClient) {}
 
-  async listByClient(
-    clientId: EntityId,
-    input?: CursorPageRequest,
-  ): Promise<CursorPage<Project>> {
+  async listByClient(clientId: EntityId): Promise<Project[]> {
     requireId(clientId);
-    const page = requirePageInput(input, PROJECT_PAGE_SIZE, "updated_at");
-    const session = await requireSupabaseSession(this.client);
-    let query = this.client
+    await requireSupabaseSession(this.client);
+    const { data, error } = await this.client
       .from("projects")
       .select(PROJECT_COLUMNS)
       .eq("client_id", clientId)
-      .eq("user_id", session.user.id);
-    if (page.cursor) {
-      query = query.or(timestampCursorFilter("updated_at", page.cursor));
-    }
-    const { data, error } = await query
       .order("updated_at", { ascending: false })
-      .order("id", { ascending: false })
-      .limit(page.limit + 1);
+      .limit(RECORD_LIMIT);
     throwIfDatabaseError(error, "无法读取客户项目，请稍后重试。");
-    return createCursorPage(
-      data,
-      mapProjectRow,
-      page.limit,
-      "updated_at",
-      "项目服务返回了无效记录。",
-    );
+    return parseRows(data, mapProjectRow, "项目服务返回了无效记录。");
   }
 
   async getById(id: EntityId): Promise<Project | null> {
@@ -198,23 +159,14 @@ export class SupabaseRequirementRepository implements RequirementRepository {
   constructor(private readonly client: SupabaseClient) {}
 
   async listByProject(projectId: EntityId): Promise<Requirement[]> {
-    return this.listByProjectIds([projectId]);
-  }
-
-  async listByProjectIds(
-    projectIds: readonly EntityId[],
-  ): Promise<Requirement[]> {
-    const ids = requireProjectIds(projectIds);
-    const session = await requireSupabaseSession(this.client);
-    if (ids.length === 0) return [];
+    requireId(projectId);
+    await requireSupabaseSession(this.client);
     const { data, error } = await this.client
       .from("requirements")
       .select(REQUIREMENT_COLUMNS)
-      .in("project_id", ids)
-      .eq("user_id", session.user.id)
-      .order("project_id")
+      .eq("project_id", projectId)
       .order("sort_order")
-      .order("id");
+      .limit(RECORD_LIMIT);
     throwIfDatabaseError(error, "无法读取项目需求，请稍后重试。");
     return parseRows(data, mapRequirementRow, "需求服务返回了无效记录。");
   }
@@ -223,47 +175,15 @@ export class SupabaseRequirementRepository implements RequirementRepository {
 export class SupabaseTaskRepository implements TaskRepository {
   constructor(private readonly client: SupabaseClient) {}
 
-  async list(input?: ListTasksInput): Promise<CursorPage<Task>> {
-    const page = requireTaskPageInput(input);
-    const session = await requireSupabaseSession(this.client);
-    let query = this.client
-      .from("tasks")
-      .select(TASK_COLUMNS)
-      .eq("user_id", session.user.id);
-    if (page.status) query = query.eq("status", page.status);
-    if (page.cursor) {
-      query = query.or(timestampCursorFilter("created_at", page.cursor));
-    }
-    const { data, error } = await query
-      .order("created_at", { ascending: false })
-      .order("id", { ascending: false })
-      .limit(page.limit + 1);
-    throwIfDatabaseError(error, "无法读取任务列表，请稍后重试。");
-    return createCursorPage(
-      data,
-      mapTaskRow,
-      page.limit,
-      "created_at",
-      "任务服务返回了无效记录。",
-    );
-  }
-
   async listByProject(projectId: EntityId): Promise<Task[]> {
-    return this.listByProjectIds([projectId]);
-  }
-
-  async listByProjectIds(projectIds: readonly EntityId[]): Promise<Task[]> {
-    const ids = requireProjectIds(projectIds);
-    const session = await requireSupabaseSession(this.client);
-    if (ids.length === 0) return [];
+    requireId(projectId);
+    await requireSupabaseSession(this.client);
     const { data, error } = await this.client
       .from("tasks")
       .select(TASK_COLUMNS)
-      .in("project_id", ids)
-      .eq("user_id", session.user.id)
-      .order("project_id")
+      .eq("project_id", projectId)
       .order("sort_order")
-      .order("id");
+      .limit(RECORD_LIMIT);
     throwIfDatabaseError(error, "无法读取项目任务，请稍后重试。");
     return parseRows(data, mapTaskRow, "任务服务返回了无效记录。");
   }
@@ -349,88 +269,6 @@ function parseRows<T>(
     throw new AppServiceError("internal_error", message, true);
   }
   return data.map((row) => mapper(requireRow(row)));
-}
-
-interface TimestampedEntity {
-  createdAt: string;
-  id: EntityId;
-  updatedAt: string;
-}
-
-function createCursorPage<T extends TimestampedEntity>(
-  data: unknown,
-  mapper: (row: Record<string, unknown>) => T,
-  limit: number,
-  sort: "created_at" | "updated_at",
-  message: string,
-): CursorPage<T> {
-  const rows = parseRows(data, mapper, message);
-  const hasNextPage = rows.length > limit;
-  const items = rows.slice(0, limit);
-  const last = items.at(-1);
-  return {
-    items,
-    nextCursor:
-      hasNextPage && last
-        ? encodeTimestampPageCursor({
-            version: 1,
-            sort,
-            timestamp: sort === "created_at" ? last.createdAt : last.updatedAt,
-            id: last.id,
-          })
-        : null,
-  };
-}
-
-function requirePageInput(
-  input: CursorPageRequest | undefined,
-  defaultLimit: number,
-  sort: "created_at" | "updated_at",
-) {
-  const parsed = CursorPageRequestSchema.safeParse(input ?? {});
-  if (!parsed.success) throwValidation("分页参数无效。");
-  const cursor = requireTimestampCursor(parsed.data.cursor, sort);
-  return { cursor, limit: parsed.data.limit ?? defaultLimit };
-}
-
-function requireTaskPageInput(input: ListTasksInput | undefined) {
-  const parsed = ListTasksInputSchema.safeParse(input ?? {});
-  if (!parsed.success) throwValidation("任务分页参数无效。");
-  return {
-    cursor: requireTimestampCursor(parsed.data.cursor, "created_at"),
-    limit: parsed.data.limit ?? TASK_PAGE_SIZE,
-    status: parsed.data.status,
-  };
-}
-
-function requireTimestampCursor(
-  value: string | null | undefined,
-  sort: "created_at" | "updated_at",
-) {
-  if (!value) return null;
-  const cursor = decodeTimestampPageCursor(value);
-  if (!cursor || cursor.sort !== sort) throwValidation("分页游标无效。");
-  return cursor;
-}
-
-function timestampCursorFilter(
-  column: "created_at" | "updated_at",
-  cursor: { id: EntityId; timestamp: string },
-): string {
-  return `${column}.lt.${cursor.timestamp},and(${column}.eq.${cursor.timestamp},id.lt.${cursor.id})`;
-}
-
-function requireProjectIds(projectIds: readonly EntityId[]): EntityId[] {
-  if (projectIds.length > MAX_PROJECT_BATCH_SIZE) {
-    throwValidation("批量项目数量超过限制。");
-  }
-  const uniqueIds = [...new Set(projectIds)];
-  for (const id of uniqueIds) requireId(id);
-  return uniqueIds;
-}
-
-function throwValidation(message: string): never {
-  throw new AppServiceError("validation_failed", message, false);
 }
 
 function requireRow(data: unknown): Record<string, unknown> {

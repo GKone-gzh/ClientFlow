@@ -52,10 +52,10 @@ interface AuthService {
 
 公共接口定义在 `interfaces.ts`。职责如下：
 
-- `ClientRepository`：当前用户的 cursor page/get/create/update。
-- `ProjectRepository`：按 client cursor page、get/create/update。
-- `RequirementRepository`：按单个或一组 project ID 有序读取 requirements。
-- `TaskRepository`：当前用户 cursor page，以及按单个或一组 project ID 有序读取 tasks。
+- `ClientRepository`：当前用户的 client list/get/create/update。
+- `ProjectRepository`：按 client list、get/create/update。
+- `RequirementRepository`：按 project 有序读取 requirements。
+- `TaskRepository`：按 project 有序读取 tasks。
 - `UploadRepository`：准备受限上传、读取 upload、上传完成确认。
 - `AIExtractionRepository`：读取 extraction、对已上传文件请求提取。
 
@@ -64,11 +64,23 @@ Repository 必须满足：
 - 返回领域模型，不把 Supabase row、HTTP response 或 SDK error 泄漏给 UI。
 - 找不到数据返回 `null`，授权失败返回标准错误，不能用空结果掩盖所有错误。
 - App Mock 和 Supabase 实现遵守相同接口和状态语义。
-- Client、Project 和当前用户 Task 列表统一返回 `CursorPage<T>`；Mock、Supabase 和 Feature 不得定义第二套分页 DTO。
-- Cursor 是不透明字符串，当前版本包含版本号、排序列、时间戳和 UUID secondary key。Client/Project 使用 `(updated_at desc, id desc)`；Task 使用 `(created_at desc, id desc)`。
-- 默认页大小集中在 contracts：Client 50、Project 25、Task 50；公共上限为 100。Repository 使用 `limit + 1` 判断 `nextCursor`，不能依赖静默 `.limit(200)` 表示完整结果。
-- Task page 可使用公共 `TaskStatus` 过滤；owner 仍由 Session 与 RLS 决定，分页输入不接受 `userId`。
-- Requirements/Tasks 批量 project ID 查询单次最多 50 个 ID，Feature 只对当前 Project page 执行批量读取。
+
+Phase 2.5 P2 Batch 1 新增以下增量读取合同；Architecture Review 通过前不替换现有 Repository 方法，也不由 Feature 提前消费：
+
+- `ClientPageRepository.listPage(input?)`：返回当前用户的 `CursorPage<Client>`。
+- `ProjectPageRepository.listPageByClient(clientId, input?)`：返回指定 client 的 `CursorPage<Project>`。
+- `TaskPageRepository.listPage(input?)`：直接返回当前用户的 `CursorPage<TaskListItem>`，不接受 `userId`。`TaskListItem` 在 Task 字段之外只补充 `clientId`、`clientName`、`projectName`，供列表一次查询显示归属名称。
+- `RequirementBatchRepository.listByProjectIds({ projectIds })` 与 `TaskBatchRepository.listByProjectIds({ projectIds })`：单次读取当前 project page 的子项，输出分别仍为公共 `Requirement[]` 与 `Task[]`，不建立第二套业务 DTO。
+
+公共分页合同：
+
+- 输入统一为 strict `CursorPageRequest`：`cursor?: string | null`、`limit?: number`；Task 仅额外支持公共 `TaskStatus` 过滤。
+- 输出统一为 `{ items, nextCursor }`；空页固定为 `{ items: [], nextCursor: null }`。
+- 默认页大小集中在 contracts：Client 50、Project 25、Task 50；公共上限为 100。Batch project ID 上限为 50，必须为不重复 UUID；输入不接受 `userId`。
+- Cursor 对调用方是不透明字符串。当前版本由 Repository adapter 运行时解析，绑定 resource、排序列与查询 scope，并携带时间戳和 UUID 唯一 secondary key。Client/Project 计划使用 `(updated_at desc, id desc)`，Task 计划使用 `(created_at desc, id desc)`。
+- Mock 与 Supabase 必须使用同一 DTO、默认值、顺序、`nextCursor` 和空页语义；Supabase row/PostgREST 类型不得进入公共合同。
+- Batch 输出按 `(projectId, sortOrder, id)` 稳定排序，并继续依赖 Session、显式 owner 条件与 RLS 保证归属。真实 Supabase query、Feature N+1 替换及 index 验证属于 Review 后的 Batch 2。
+- 现有数组列表方法只保留到 Architecture Review 完成；Batch 2 由 Mock、Supabase 与 Feature 同步采用上述合同，禁止再定义兼容 DTO。
 
 ## 6. Service 接口
 

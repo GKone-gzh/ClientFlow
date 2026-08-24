@@ -1,35 +1,21 @@
-import {
-  CLIENT_PAGE_SIZE,
-  CursorPageRequestSchema,
-  EntityIdSchema,
-  ListTasksInputSchema,
-  MAX_PROJECT_BATCH_SIZE,
-  PROJECT_PAGE_SIZE,
-  TASK_PAGE_SIZE,
-  decodeTimestampPageCursor,
-  encodeTimestampPageCursor,
-  type AIExtraction,
-  type Client,
-  type ClientRepository,
-  type ConfirmExtractionResult,
-  type CreateClientInput,
-  type CreateProjectInput,
-  type CursorPage,
-  type CursorPageRequest,
-  type EntityId,
-  type ListTasksInput,
-  type Project,
-  type ProjectRepository,
-  type Requirement,
-  type RequirementRepository,
-  type Task,
-  type TaskRepository,
-  type UpdateClientInput,
-  type UpdateProjectInput,
-  type Upload,
+import type {
+  Client,
+  ClientRepository,
+  ConfirmExtractionResult,
+  CreateClientInput,
+  CreateProjectInput,
+  EntityId,
+  Project,
+  ProjectRepository,
+  Requirement,
+  RequirementRepository,
+  Task,
+  TaskRepository,
+  AIExtraction,
+  Upload,
+  UpdateClientInput,
+  UpdateProjectInput,
 } from "@clientflow/contracts";
-
-import { AppServiceError } from "@/services/service-error";
 
 import {
   MOCK_CLIENTS,
@@ -69,14 +55,9 @@ export class MockRepositoryStore {
 class MockClientRepository implements ClientRepository {
   constructor(private readonly store: MockRepositoryStore) {}
 
-  async list(input?: CursorPageRequest): Promise<CursorPage<Client>> {
+  async list() {
     await simulateLatency();
-    return paginateByTimestamp(
-      this.store.clients,
-      input,
-      CLIENT_PAGE_SIZE,
-      "updated_at",
-    );
+    return this.store.clients.map((client) => ({ ...client }));
   }
 
   async getById(id: EntityId) {
@@ -116,15 +97,11 @@ class MockClientRepository implements ClientRepository {
 class MockProjectRepository implements ProjectRepository {
   constructor(private readonly store: MockRepositoryStore) {}
 
-  async listByClient(clientId: EntityId, input?: CursorPageRequest) {
+  async listByClient(clientId: EntityId) {
     await simulateLatency();
-    requireId(clientId);
-    return paginateByTimestamp(
-      this.store.projects.filter((project) => project.clientId === clientId),
-      input,
-      PROJECT_PAGE_SIZE,
-      "updated_at",
-    );
+    return this.store.projects
+      .filter((project) => project.clientId === clientId)
+      .map((project) => ({ ...project }));
   }
 
   async getById(id: EntityId) {
@@ -165,15 +142,10 @@ class MockRequirementRepository implements RequirementRepository {
   constructor(private readonly store: MockRepositoryStore) {}
 
   async listByProject(projectId: EntityId) {
-    return this.listByProjectIds([projectId]);
-  }
-
-  async listByProjectIds(projectIds: readonly EntityId[]) {
     await simulateLatency();
-    const ids = new Set(requireProjectIds(projectIds));
     return this.store.requirements
-      .filter((requirement) => ids.has(requirement.projectId))
-      .sort(compareProjectChildren)
+      .filter((requirement) => requirement.projectId === projectId)
+      .sort((left, right) => left.sortOrder - right.sortOrder)
       .map((requirement): Requirement => ({ ...requirement }));
   }
 }
@@ -181,115 +153,13 @@ class MockRequirementRepository implements RequirementRepository {
 class MockTaskRepository implements TaskRepository {
   constructor(private readonly store: MockRepositoryStore) {}
 
-  async list(input?: ListTasksInput): Promise<CursorPage<Task>> {
-    await simulateLatency();
-    const parsed = ListTasksInputSchema.safeParse(input ?? {});
-    if (!parsed.success) throwValidation("任务分页参数无效。");
-    return paginateByTimestamp(
-      this.store.tasks.filter(
-        (task) => !parsed.data.status || task.status === parsed.data.status,
-      ),
-      { cursor: parsed.data.cursor, limit: parsed.data.limit },
-      TASK_PAGE_SIZE,
-      "created_at",
-    );
-  }
-
   async listByProject(projectId: EntityId) {
-    return this.listByProjectIds([projectId]);
-  }
-
-  async listByProjectIds(projectIds: readonly EntityId[]) {
     await simulateLatency();
-    const ids = new Set(requireProjectIds(projectIds));
     return this.store.tasks
-      .filter((task) => ids.has(task.projectId))
-      .sort(compareProjectChildren)
+      .filter((task) => task.projectId === projectId)
+      .sort((left, right) => left.sortOrder - right.sortOrder)
       .map((task): Task => ({ ...task }));
   }
-}
-
-interface TimestampedEntity {
-  createdAt: string;
-  id: EntityId;
-  updatedAt: string;
-}
-
-function paginateByTimestamp<T extends TimestampedEntity>(
-  source: readonly T[],
-  input: CursorPageRequest | undefined,
-  defaultLimit: number,
-  sort: "created_at" | "updated_at",
-): CursorPage<T> {
-  const parsed = CursorPageRequestSchema.safeParse(input ?? {});
-  if (!parsed.success) throwValidation("分页参数无效。");
-  const cursor = parsed.data.cursor
-    ? decodeTimestampPageCursor(parsed.data.cursor)
-    : null;
-  if (parsed.data.cursor && (!cursor || cursor.sort !== sort)) {
-    throwValidation("分页游标无效。");
-  }
-  const timestamp = (item: T) =>
-    sort === "created_at" ? item.createdAt : item.updatedAt;
-  const ordered = source
-    .filter(
-      (item) =>
-        !cursor ||
-        timestamp(item) < cursor.timestamp ||
-        (timestamp(item) === cursor.timestamp && item.id < cursor.id),
-    )
-    .toSorted(
-      (left, right) =>
-        timestamp(right).localeCompare(timestamp(left)) ||
-        right.id.localeCompare(left.id),
-    );
-  const limit = parsed.data.limit ?? defaultLimit;
-  const items = ordered.slice(0, limit).map((item) => ({ ...item }));
-  const last = items.at(-1);
-  return {
-    items,
-    nextCursor:
-      ordered.length > limit && last
-        ? encodeTimestampPageCursor({
-            version: 1,
-            sort,
-            timestamp: timestamp(last),
-            id: last.id,
-          })
-        : null,
-  };
-}
-
-function compareProjectChildren(
-  left: Requirement | Task,
-  right: Requirement | Task,
-) {
-  return (
-    left.projectId.localeCompare(right.projectId) ||
-    left.sortOrder - right.sortOrder ||
-    left.id.localeCompare(right.id)
-  );
-}
-
-function requireProjectIds(projectIds: readonly EntityId[]): EntityId[] {
-  if (projectIds.length > MAX_PROJECT_BATCH_SIZE) {
-    throwValidation("批量项目数量超过限制。");
-  }
-  const ids = [...new Set(projectIds)];
-  if (ids.some((id) => !EntityIdSchema.safeParse(id).success)) {
-    throwValidation("记录标识无效。");
-  }
-  return ids;
-}
-
-function requireId(id: EntityId): void {
-  if (!EntityIdSchema.safeParse(id).success) {
-    throwValidation("记录标识无效。");
-  }
-}
-
-function throwValidation(message: string): never {
-  throw new AppServiceError("validation_failed", message, false);
 }
 
 export interface MockRepositories {

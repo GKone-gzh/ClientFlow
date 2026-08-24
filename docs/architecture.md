@@ -107,8 +107,6 @@ Edge Intake 在下载并复核图片后调用 service-role-only reservation RPC�
 
 Mock Repository 仅用于 App 独立开发，必须实现相同公共接口。Mock 数据不能定义第二套 DTO 或状态。接入真实后端时应替换实现，而不是改页面业务合同。
 
-Client、Project 和当前用户 Task 列表使用公共 cursor page 合同。Client/Project cursor 为 `(updated_at desc, id desc)`，Task cursor 为 `(created_at desc, id desc)`；UUID secondary key 保证相同时间戳下顺序稳定。Task 页面直接查询受 RLS 保护的当前用户 tasks，不再遍历 clients/projects。Client Detail 先读取一个 Project page，再分别按该页 project IDs 批量读取 requirements/tasks，由 Feature 按 projectId 组合；该读路径不引入 RPC、GraphQL 或第二业务层。
-
 Supabase production composition 与 Mock composition 必须在创建阶段分离。Supabase 路径不得初始化 Mock Repository、Mock AI scenario 或 development tools；`developmentTools` 在 Supabase 模式始终为 `null`。Native Auth Session 使用平台安全凭据存储，Web 使用独立 Web storage adapter，二者保持相同 Supabase storage 接口。
 
 ## 7. 状态转换
