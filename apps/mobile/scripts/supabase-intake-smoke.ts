@@ -164,6 +164,13 @@ export async function runSupabaseIntakeSmoke(source: IntakeSmokeEnvironment) {
       "extraction_not_ready",
       "The expected server extraction did not reach needs_review.",
     );
+    const replayedExtraction = await intake.requestExtraction(prepared.uploadId);
+    requireCondition(
+      replayedExtraction.id === extraction.id &&
+        replayedExtraction.status === "needs_review",
+      "extraction_not_idempotent",
+      "Retrying request-extraction did not return the existing extraction.",
+    );
     const reviewResult = await intake.getValidatedResult(extraction.id);
     const validatedReview = AIExtractionResultSchema.safeParse(reviewResult);
     requireCondition(
@@ -230,6 +237,7 @@ export async function runSupabaseIntakeSmoke(source: IntakeSmokeEnvironment) {
       confirmed: true,
       crossUserRejected: true,
       idempotent: true,
+      extractionIdempotent: true,
       extractionDurationMs,
       projectCount: detail.projects.length,
       requirementCount: firstConfirmation.requirementIds.length,

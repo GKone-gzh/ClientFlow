@@ -21,7 +21,7 @@
     "test": "pnpm run test:contracts-db && pnpm run test:security && pnpm run test:db && pnpm -r --if-present test",
     "test:contracts-db": "node --test scripts/contract-db-parity.test.mjs",
     "test:db": "node --test supabase/tests/migration.test.mjs",
-    "test:security": "node --test scripts/security-secret-scan.test.mjs",
+    "test:security": "node --test scripts/security-secret-scan.test.mjs scripts/supabase-config-security.test.mjs",
     "typecheck": "pnpm -r --if-present typecheck",
     "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm security:secrets"
   },

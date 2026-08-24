@@ -1,1 +1,16 @@
 project_id = "clientflow"
+
+[functions.prepare-upload]
+verify_jwt = true
+
+[functions.mark-uploaded]
+verify_jwt = true
+
+[functions.request-extraction]
+verify_jwt = true
+
+[functions.get-extraction]
+verify_jwt = true
+
+[functions.confirm-extraction]
+verify_jwt = true
