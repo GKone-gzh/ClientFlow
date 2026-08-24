@@ -4,10 +4,16 @@ import { Button, Text, TextInput } from "react-native";
 
 import { PlaceholderScreen } from "@/components/placeholder-screen";
 import { useCreateClientMutation } from "@/features/clients/client-queries";
+import { resolveMutationScreenState } from "@/features/screen-state/screen-state";
 
 export default function NewClientScreen() {
   const [name, setName] = useState("");
   const createClient = useCreateClientMutation();
+  const screenState = resolveMutationScreenState({
+    isError: createClient.isError,
+    isPending: createClient.isPending,
+    isSuccess: createClient.isSuccess,
+  });
 
   return (
     <PlaceholderScreen title="添加客户" description="手动创建客户的占位表单。">
@@ -17,10 +23,12 @@ export default function NewClientScreen() {
         placeholder="客户姓名"
         value={name}
       />
-      {createClient.isError ? <Text accessibilityRole="alert">保存失败，请重试。</Text> : null}
+      {screenState === "error" ? (
+        <Text accessibilityRole="alert">保存失败，请重试。</Text>
+      ) : null}
       <Button
-        title={createClient.isPending ? "保存中..." : "保存"}
-        disabled={name.trim().length === 0 || createClient.isPending}
+        title={screenState === "submitting" ? "保存中..." : "保存"}
+        disabled={name.trim().length === 0 || screenState === "submitting"}
         onPress={() => {
           createClient.mutate(
             {

@@ -5,6 +5,7 @@ import { AppProviders } from "@/components/app-providers";
 import { LoadingState } from "@/components/async-state";
 import { PlaceholderScreen } from "@/components/placeholder-screen";
 import { useAuthSession } from "@/features/auth/auth-session-provider";
+import { resolveAuthRestoreScreenState } from "@/features/screen-state/screen-state";
 
 export default function RootLayout() {
   return (
@@ -16,8 +17,12 @@ export default function RootLayout() {
 
 function AuthenticatedNavigation() {
   const { isRestoring, restoreError, retryRestore } = useAuthSession();
+  const screenState = resolveAuthRestoreScreenState({
+    hasError: Boolean(restoreError),
+    isRestoring,
+  });
 
-  if (isRestoring) {
+  if (screenState === "restoring") {
     return (
       <PlaceholderScreen
         title="ClientFlow"
@@ -28,7 +33,7 @@ function AuthenticatedNavigation() {
       </PlaceholderScreen>
     );
   }
-  if (restoreError) {
+  if (screenState === "error") {
     return (
       <PlaceholderScreen
         title="无法恢复登录"
