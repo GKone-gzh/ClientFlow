@@ -30,7 +30,11 @@ export default function ProfileScreen() {
   };
 
   return (
-    <PlaceholderScreen title="我的" description="个人资料占位页面。">
+    <PlaceholderScreen
+      title="我的"
+      description="个人资料占位页面。"
+      insetMode="tabs"
+    >
       <Text>当前账号：{session?.user.email ?? "未提供邮箱"}</Text>
       <Link href="/(app)/settings">设置</Link>
       <Link href="/(app)/subscription">订阅</Link>

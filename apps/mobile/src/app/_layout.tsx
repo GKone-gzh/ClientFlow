@@ -19,14 +19,22 @@ function AuthenticatedNavigation() {
 
   if (isRestoring) {
     return (
-      <PlaceholderScreen title="ClientFlow" description="正在恢复登录状态。">
+      <PlaceholderScreen
+        title="ClientFlow"
+        description="正在恢复登录状态。"
+        insetMode="fullscreen"
+      >
         <LoadingState label="正在检查 Session..." />
       </PlaceholderScreen>
     );
   }
   if (restoreError) {
     return (
-      <PlaceholderScreen title="无法恢复登录" description="请检查网络后重试。">
+      <PlaceholderScreen
+        title="无法恢复登录"
+        description="请检查网络后重试。"
+        insetMode="fullscreen"
+      >
         <Text accessibilityRole="alert">{restoreError}</Text>
         <Button title="重试" onPress={retryRestore} />
       </PlaceholderScreen>

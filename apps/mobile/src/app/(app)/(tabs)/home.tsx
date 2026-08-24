@@ -15,7 +15,11 @@ export default function HomeScreen() {
   const isError = clientsQuery.isError || tasksQuery.isError;
 
   return (
-    <PlaceholderScreen title="首页" description="ClientFlow 业务概览占位页面。">
+    <PlaceholderScreen
+      title="首页"
+      description="ClientFlow 业务概览占位页面。"
+      insetMode="tabs"
+    >
       <Link href="/(app)/intake/upload">从聊天截图添加客户</Link>
       {isPending ? <LoadingState label="正在加载概览..." /> : null}
       {isError ? (

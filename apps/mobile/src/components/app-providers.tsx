@@ -1,5 +1,6 @@
 import type { PropsWithChildren } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { AuthSessionProvider } from "@/features/auth/auth-session-provider";
 import { readAppEnvironment } from "@/services/app-environment";
@@ -15,10 +16,12 @@ const composition = composeAppServices({
 
 export function AppProviders({ children }: PropsWithChildren) {
   return (
-    <AppServiceProvider composition={composition}>
-      <QueryClientProvider client={queryClient}>
-        <AuthSessionProvider>{children}</AuthSessionProvider>
-      </QueryClientProvider>
-    </AppServiceProvider>
+    <SafeAreaProvider>
+      <AppServiceProvider composition={composition}>
+        <QueryClientProvider client={queryClient}>
+          <AuthSessionProvider>{children}</AuthSessionProvider>
+        </QueryClientProvider>
+      </AppServiceProvider>
+    </SafeAreaProvider>
   );
 }

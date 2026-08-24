@@ -8,7 +8,11 @@ export default function TasksScreen() {
   const tasksQuery = useTasksQuery();
 
   return (
-    <PlaceholderScreen title="任务" description="当前使用 Mock Repository。">
+    <PlaceholderScreen
+      title="任务"
+      description="当前使用 Mock Repository。"
+      insetMode="tabs"
+    >
       {tasksQuery.isPending ? <LoadingState label="正在加载任务..." /> : null}
       {tasksQuery.isError ? (
         <ErrorState onRetry={() => void tasksQuery.refetch()} />

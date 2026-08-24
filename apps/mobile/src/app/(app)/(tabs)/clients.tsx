@@ -11,7 +11,11 @@ export default function ClientsScreen() {
   const clientsQuery = useClientsQuery();
 
   return (
-    <PlaceholderScreen title="客户" description="当前使用 Mock Repository。">
+    <PlaceholderScreen
+      title="客户"
+      description="当前使用 Mock Repository。"
+      insetMode="tabs"
+    >
       <Link href="/(app)/clients/new">手动添加客户</Link>
       <Link href="/(app)/clients/import">从聊天添加客户</Link>
       {clientsQuery.isPending ? <LoadingState label="正在加载客户..." /> : null}
