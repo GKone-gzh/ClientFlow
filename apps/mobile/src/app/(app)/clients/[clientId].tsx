@@ -21,6 +21,9 @@ export default function ClientDetailScreen() {
           <Text>姓名：{detailQuery.data.client.name}</Text>
           <Text>状态：{detailQuery.data.client.status}</Text>
           <Text>联系方式：{detailQuery.data.client.contactHandle ?? "未填写"}</Text>
+          {detailQuery.isPlaceholderData ? (
+            <LoadingState label="正在加载项目、需求和任务..." />
+          ) : null}
           {detailQuery.data.projects.map(({ project, requirements, tasks }) => (
             <View key={project.id}>
               <Text>项目：{project.name}</Text>

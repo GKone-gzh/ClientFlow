@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CreateClientInput, EntityId } from "@clientflow/contracts";
 
+import { findClientInListCache } from "@/features/clients/client-cache";
 import { loadClientDetail } from "@/features/clients/client-detail";
 import { clientKeys } from "@/features/query/query-keys";
 import {
@@ -20,10 +21,15 @@ export function useClientsQuery() {
 
 export function useClientDetailQuery(clientId: EntityId) {
   const services = useAppServices();
+  const queryClient = useQueryClient();
   return useQuery({
     ...CLIENT_DETAIL_QUERY_POLICY,
     queryKey: clientKeys.detail(clientId),
     queryFn: () => loadClientDetail(services, clientId),
+    placeholderData: () => {
+      const client = findClientInListCache(queryClient, clientId);
+      return client ? { client, projects: [] } : undefined;
+    },
   });
 }
 
