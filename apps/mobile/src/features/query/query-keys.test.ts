@@ -15,10 +15,10 @@ test("separates client lists and details under stable prefixes", () => {
 });
 
 test("keeps task filters in the task list key", () => {
-  assert.deepEqual(taskKeys.list({ status: ["todo", "blocked"] }), [
+  assert.deepEqual(taskKeys.list({ status: "todo" }), [
     "tasks",
     "list",
-    { status: ["todo", "blocked"] },
+    { status: "todo" },
   ]);
 });
 
