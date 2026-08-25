@@ -64,7 +64,26 @@ Repository 必须满足：
 - 返回领域模型，不把 Supabase row、HTTP response 或 SDK error 泄漏给 UI。
 - 找不到数据返回 `null`，授权失败返回标准错误，不能用空结果掩盖所有错误。
 - App Mock 和 Supabase 实现遵守相同接口和状态语义。
-- 列表 MVP 可先返回有上限的数组；引入分页前必须统一增加公共分页合同。
+
+Phase 2.5 P2 Batch 1 新增以下增量读取合同；Architecture Review 通过前不替换现有 Repository 方法，也不由 Feature 提前消费：
+
+- `ClientPageRepository.listPage(input?)`：返回当前用户的 `CursorPage<Client>`。
+- `ProjectPageRepository.listPageByClient(clientId, input?)`：返回指定 client 的 `CursorPage<Project>`。
+- `TaskPageRepository.listPage(input?)`：直接返回当前用户的 `CursorPage<TaskListItem>`，不接受 `userId`。`TaskListItem` 在 Task 字段之外只补充 `clientId`、`clientName`、`projectName`，供列表一次查询显示归属名称。
+- `RequirementBatchRepository.listByProjectIds({ projectIds })` 与 `TaskBatchRepository.listByProjectIds({ projectIds })`：单次读取当前 project page 的子项，输出分别仍为公共 `Requirement[]` 与 `Task[]`，不建立第二套业务 DTO。`projectIds: []` 必须直接返回 `[]`，不得调用底层数据源。
+
+公共分页合同：
+
+- 输入统一为 strict `CursorPageRequest`：`cursor?: string | null`、`limit?: number`；Task 仅额外支持公共 `TaskStatus` 过滤。
+- 输出统一为 `{ items, nextCursor }`；空页固定为 `{ items: [], nextCursor: null }`。
+- 默认页大小集中在 contracts：Client 50、Project 25、Task 50；公共上限为 100。Batch project ID 上限为 50，必须为不重复 UUID；输入不接受 `userId`。
+- Cursor 对调用方是不透明字符串。当前版本携带 resource、排序列、查询 scope、时间戳和 UUID 唯一 secondary key。Client/Project 计划使用 `(updated_at desc, id desc)`，Task 计划使用 `(created_at desc, id desc)`。
+- Repository adapter 必须使用公共 `createClientCursorQuery()`、`createProjectCursorQuery(clientId)`、`createTaskCursorQuery(status)` 构造 query descriptor，再统一调用 `decodeTimestampPageCursor(cursor, expectedQuery)`；不得在 Mock 或 Supabase 内复制 resource/order/scope 规则。`cursor` 为 `undefined` 或 `null` 表示第一页并返回 `null`；只要调用方提供了 cursor，格式、JSON、version、resource、order、scope、timestamp 或 id 任一无效，都必须抛出 `ContractValidationError`，稳定映射为 `validation_failed` 且不可重试。禁止把非法 cursor 当作第一页。
+- Cursor query scope 绑定规则是公共合同而不是 Adapter 私有逻辑：Client scope 固定为 `null`；Project scope 是当前 `clientId`；Task scope 是当前 `TaskStatus` 或 `null`。不同 resource、order、client 或 Task status 的 cursor 不得复用。
+- Batch 1 的 capability-surface test 只验证 Mock 与 Supabase 将共用的接口形状和输入输出类型，不代表真实 Adapter parity。真实 Adapter 的排序、分页边界、`nextCursor`、空页、非法 cursor 与错误映射 parity 必须在 Batch 2 实现和测试。
+- Mock 与 Supabase 最终必须使用同一 DTO、默认值、顺序、`nextCursor`、非法 cursor 和空页语义；Supabase row/PostgREST 类型不得进入公共合同。
+- Batch 输出按 `(projectId, sortOrder, id)` 稳定排序，并继续依赖 Session、显式 owner 条件与 RLS 保证归属。真实 Supabase query、Feature N+1 替换及 index 验证属于 Review 后的 Batch 2。
+- 现有数组列表方法只保留到 Architecture Review 完成；Batch 2 由 Mock、Supabase 与 Feature 同步采用上述合同，禁止再定义兼容 DTO。
 
 ## 6. Service 接口
 

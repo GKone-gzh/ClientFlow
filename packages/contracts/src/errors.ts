@@ -19,3 +19,16 @@ export interface ContractErrorShape {
   retryable: boolean;
   details?: Record<string, unknown>;
 }
+
+export class ContractValidationError
+  extends Error
+  implements ContractErrorShape
+{
+  readonly code = "validation_failed" as const;
+  readonly retryable = false;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "ContractValidationError";
+  }
+}
