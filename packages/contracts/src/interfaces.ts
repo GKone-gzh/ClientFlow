@@ -66,10 +66,12 @@ export interface TaskPageRepository {
 }
 
 export interface RequirementBatchRepository {
+  /** Empty projectIds returns [] without invoking the backing data source. */
   listByProjectIds(input: ProjectBatchInput): Promise<Requirement[]>;
 }
 
 export interface TaskBatchRepository {
+  /** Empty projectIds returns [] without invoking the backing data source. */
   listByProjectIds(input: ProjectBatchInput): Promise<Task[]>;
 }
 

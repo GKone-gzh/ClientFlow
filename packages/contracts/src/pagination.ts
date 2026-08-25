@@ -1,7 +1,8 @@
 import { z } from "zod";
 
+import { ContractValidationError } from "./errors.ts";
 import { EntityIdSchema } from "./inputs.ts";
-import { TaskStatusSchema } from "./statuses.ts";
+import { TaskStatusSchema, type TaskStatus } from "./statuses.ts";
 
 export const CLIENT_PAGE_SIZE = 50;
 export const PROJECT_PAGE_SIZE = 25;
@@ -59,6 +60,56 @@ const TimestampCursorPositionSchema = z.object({
   id: EntityIdSchema,
 });
 
+export const TimestampCursorQuerySchema = z.discriminatedUnion("resource", [
+  z
+    .object({
+      resource: z.literal("clients"),
+      order: z.literal("updated_at"),
+      scope: z.null(),
+    })
+    .strict(),
+  z
+    .object({
+      resource: z.literal("projects"),
+      order: z.literal("updated_at"),
+      scope: EntityIdSchema,
+    })
+    .strict(),
+  z
+    .object({
+      resource: z.literal("tasks"),
+      order: z.literal("created_at"),
+      scope: TaskStatusSchema.nullable(),
+    })
+    .strict(),
+]);
+
+export type TimestampCursorQuery = z.infer<typeof TimestampCursorQuerySchema>;
+
+export function createClientCursorQuery(): TimestampCursorQuery {
+  return { resource: "clients", order: "updated_at", scope: null };
+}
+
+export function createProjectCursorQuery(
+  clientId: string,
+): TimestampCursorQuery {
+  return TimestampCursorQuerySchema.parse({
+    resource: "projects",
+    order: "updated_at",
+    scope: clientId,
+  });
+}
+
+export function createTaskCursorQuery(
+  status?: TaskStatus | null,
+): TimestampCursorQuery {
+  return {
+    resource: "tasks",
+    order: "created_at",
+    scope: status ?? null,
+  };
+}
+
 export const TimestampPageCursorSchema = z.discriminatedUnion("resource", [
   TimestampCursorPositionSchema.extend({
     resource: z.literal("clients"),
@@ -88,14 +139,40 @@ export function encodeTimestampPageCursor(cursor: TimestampPageCursor): string {
 }
 
 export function decodeTimestampPageCursor(
-  cursor: string,
+  cursor: string | null | undefined,
+  expectedQuery: TimestampCursorQuery,
 ): TimestampPageCursor | null {
+  if (cursor === null || cursor === undefined) return null;
+
   try {
-    const parsed = TimestampPageCursorSchema.safeParse(
+    const parsedCursor = TimestampPageCursorSchema.safeParse(
       JSON.parse(decodeURIComponent(cursor)),
     );
-    return parsed.success ? parsed.data : null;
+    const parsedQuery = TimestampCursorQuerySchema.safeParse(expectedQuery);
+    if (
+      !parsedCursor.success ||
+      !parsedQuery.success ||
+      !cursorMatchesQuery(parsedCursor.data, parsedQuery.data)
+    ) {
+      throw invalidCursorError();
+    }
+    return parsedCursor.data;
   } catch {
-    return null;
+    throw invalidCursorError();
   }
+}
+
+function cursorMatchesQuery(
+  cursor: TimestampPageCursor,
+  query: TimestampCursorQuery,
+): boolean {
+  return (
+    cursor.resource === query.resource &&
+    cursor.order === query.order &&
+    cursor.scope === query.scope
+  );
+}
+
+function invalidCursorError(): ContractValidationError {
+  return new ContractValidationError("The cursor is invalid for this query.");
 }

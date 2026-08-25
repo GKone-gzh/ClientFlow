@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { AIExtractionResultSchema } from "./ai-extraction.ts";
+import { ContractValidationError } from "./errors.ts";
 import {
   AIExtractionSchema,
   ClientSchema,
@@ -36,10 +37,13 @@ import {
   PROJECT_PAGE_SIZE,
   ProjectBatchInputSchema,
   TASK_PAGE_SIZE,
-  TimestampPageCursorSchema,
+  createClientCursorQuery,
   createCursorPageSchema,
+  createProjectCursorQuery,
+  createTaskCursorQuery,
   decodeTimestampPageCursor,
   encodeTimestampPageCursor,
+  type TimestampCursorQuery,
 } from "./pagination.ts";
 import { TaskListItemSchema } from "./read-models.ts";
 
@@ -62,6 +66,35 @@ const validExtraction = {
   confidence: 0.9,
   warnings: [],
 } as const;
+
+const CLIENT_CURSOR_QUERY = createClientCursorQuery();
+const PROJECT_CURSOR_QUERY = createProjectCursorQuery(
+  "00000000-0000-4000-8000-000000000001",
+);
+const TASK_CURSOR_QUERY = createTaskCursorQuery("todo");
+
+const CURSOR_POSITION = {
+  version: 1,
+  timestamp: "2026-08-24T12:00:00.000Z",
+  id: "00000000-0000-4000-8000-000000000003",
+} as const;
+
+function encodeUncheckedCursor(payload: unknown): string {
+  return encodeURIComponent(JSON.stringify(payload));
+}
+
+function assertCursorValidationFailed(
+  cursor: string,
+  query: TimestampCursorQuery,
+) {
+  assert.throws(
+    () => decodeTimestampPageCursor(cursor, query),
+    (error) =>
+      error instanceof ContractValidationError &&
+      error.code === "validation_failed" &&
+      error.retryable === false,
+  );
+}
 
 test("accepts a version 1 extraction result", () => {
   assert.equal(AIExtractionResultSchema.safeParse(validExtraction).success, true);
@@ -260,6 +293,9 @@ test("validates bounded page, task filter, and project batch inputs", () => {
     ProjectBatchInputSchema.safeParse({ projectIds: [projectId] }).success,
     true,
   );
+  assert.deepEqual(ProjectBatchInputSchema.parse({ projectIds: [] }), {
+    projectIds: [],
+  });
   assert.equal(
     ProjectBatchInputSchema.safeParse({ projectIds: [projectId, projectId] })
       .success,
@@ -282,38 +318,113 @@ test("validates bounded page, task filter, and project batch inputs", () => {
   );
 });
 
+test("distinguishes an absent cursor from an invalid cursor", () => {
+  assert.equal(decodeTimestampPageCursor(undefined, CLIENT_CURSOR_QUERY), null);
+  assert.equal(decodeTimestampPageCursor(null, CLIENT_CURSOR_QUERY), null);
+  assertCursorValidationFailed("not-a-cursor", CLIENT_CURSOR_QUERY);
+});
+
 test("round-trips a query-bound timestamp cursor with a stable id key", () => {
   const value = {
-    version: 1,
-    resource: "tasks",
-    order: "created_at",
-    scope: "in_progress",
-    timestamp: "2026-08-24T12:00:00.000Z",
-    id: "00000000-0000-4000-8000-000000000001",
+    ...CURSOR_POSITION,
+    ...TASK_CURSOR_QUERY,
   } as const;
 
   const cursor = encodeTimestampPageCursor(value);
 
-  assert.deepEqual(decodeTimestampPageCursor(cursor), value);
-  assert.equal(decodeTimestampPageCursor("not-a-cursor"), null);
-  assert.equal(
-    TimestampPageCursorSchema.safeParse({ ...value, id: "not-a-uuid" })
-      .success,
-    false,
+  assert.deepEqual(
+    decodeTimestampPageCursor(cursor, TASK_CURSOR_QUERY),
+    value,
   );
-  assert.equal(
-    TimestampPageCursorSchema.safeParse({ ...value, order: "updated_at" })
-      .success,
-    false,
+});
+
+test("rejects a cursor with malformed encoded JSON as validation_failed", () => {
+  assertCursorValidationFailed("%E0%A4%A", CLIENT_CURSOR_QUERY);
+  assertCursorValidationFailed(
+    encodeURIComponent("not-json"),
+    CLIENT_CURSOR_QUERY,
   );
-  assert.equal(
-    TimestampPageCursorSchema.safeParse({
-      ...value,
-      resource: "projects",
-      order: "updated_at",
-      scope: "in_progress",
-    }).success,
-    false,
+});
+
+test("rejects a cursor for the wrong resource as validation_failed", () => {
+  const cursor = encodeTimestampPageCursor({
+    ...CURSOR_POSITION,
+    ...CLIENT_CURSOR_QUERY,
+  });
+
+  assertCursorValidationFailed(cursor, PROJECT_CURSOR_QUERY);
+});
+
+test("rejects a cursor with the wrong order as validation_failed", () => {
+  const cursor = encodeUncheckedCursor({
+    ...CURSOR_POSITION,
+    ...CLIENT_CURSOR_QUERY,
+    order: "created_at",
+  });
+
+  assertCursorValidationFailed(cursor, CLIENT_CURSOR_QUERY);
+});
+
+test("rejects a cursor for another project client scope as validation_failed", () => {
+  const cursor = encodeTimestampPageCursor({
+    ...CURSOR_POSITION,
+    ...PROJECT_CURSOR_QUERY,
+  });
+  const anotherClientQuery = createProjectCursorQuery(
+    "00000000-0000-4000-8000-000000000002",
+  );
+
+  assertCursorValidationFailed(cursor, anotherClientQuery);
+});
+
+test("rejects a cursor for another task status scope as validation_failed", () => {
+  const cursor = encodeTimestampPageCursor({
+    ...CURSOR_POSITION,
+    ...TASK_CURSOR_QUERY,
+  });
+  const anotherStatusQuery = createTaskCursorQuery("done");
+
+  assertCursorValidationFailed(cursor, anotherStatusQuery);
+});
+
+test("rejects a cursor with an unsupported version as validation_failed", () => {
+  assertCursorValidationFailed(
+    encodeUncheckedCursor({
+      ...CURSOR_POSITION,
+      ...CLIENT_CURSOR_QUERY,
+      version: 2,
+    }),
+    CLIENT_CURSOR_QUERY,
+  );
+});
+
+test("rejects a cursor with an invalid timestamp as validation_failed", () => {
+  assertCursorValidationFailed(
+    encodeUncheckedCursor({
+      ...CURSOR_POSITION,
+      ...CLIENT_CURSOR_QUERY,
+      timestamp: "not-a-timestamp",
+    }),
+    CLIENT_CURSOR_QUERY,
+  );
+});
+
+test("rejects an invalid id or cursor payload as validation_failed", () => {
+  assertCursorValidationFailed(
+    encodeUncheckedCursor({
+      ...CURSOR_POSITION,
+      ...CLIENT_CURSOR_QUERY,
+      id: "not-a-uuid",
+    }),
+    CLIENT_CURSOR_QUERY,
+  );
+  assertCursorValidationFailed(
+    encodeUncheckedCursor({
+      ...CURSOR_POSITION,
+      ...CLIENT_CURSOR_QUERY,
+      unexpected: true,
+    }),
+    CLIENT_CURSOR_QUERY,
   );
 });
 
@@ -352,7 +463,7 @@ test("validates the shared task list read model and cursor page envelope", () =>
   );
 });
 
-test("keeps empty pages stable for Mock and Supabase contract consumers", () => {
+test("keeps cursor page empty-result semantics stable", () => {
   const pageSchema = createCursorPageSchema(TaskListItemSchema);
   const emptyPage = { items: [], nextCursor: null };
 
@@ -363,7 +474,7 @@ test("keeps empty pages stable for Mock and Supabase contract consumers", () => 
   );
 });
 
-test("gives Mock and Supabase adapters one repository capability surface", async () => {
+test("defines one shared repository capability surface", async () => {
   const emptyPage = { items: [], nextCursor: null };
   type AdapterContract = {
     clients: ClientPageRepository;
@@ -386,26 +497,58 @@ test("gives Mock and Supabase adapters one repository capability surface", async
       listByProjectIds: async () => [],
     },
   });
-  const mock = createAdapterContract();
-  const supabase = createAdapterContract();
+  const firstConsumer = createAdapterContract();
+  const secondConsumer = createAdapterContract();
   const batchInput = { projectIds: [] };
 
-  assert.deepEqual(await mock.clients.listPage(), await supabase.clients.listPage());
   assert.deepEqual(
-    await mock.projects.listPageByClient(
+    await firstConsumer.clients.listPage(),
+    await secondConsumer.clients.listPage(),
+  );
+  assert.deepEqual(
+    await firstConsumer.projects.listPageByClient(
       "00000000-0000-4000-8000-000000000001",
     ),
-    await supabase.projects.listPageByClient(
+    await secondConsumer.projects.listPageByClient(
       "00000000-0000-4000-8000-000000000001",
     ),
   );
-  assert.deepEqual(await mock.tasks.listPage(), await supabase.tasks.listPage());
   assert.deepEqual(
-    await mock.requirements.listByProjectIds(batchInput),
-    await supabase.requirements.listByProjectIds(batchInput),
+    await firstConsumer.tasks.listPage(),
+    await secondConsumer.tasks.listPage(),
   );
   assert.deepEqual(
-    await mock.tasks.listByProjectIds(batchInput),
-    await supabase.tasks.listByProjectIds(batchInput),
+    await firstConsumer.requirements.listByProjectIds(batchInput),
+    await secondConsumer.requirements.listByProjectIds(batchInput),
   );
+  assert.deepEqual(
+    await firstConsumer.tasks.listByProjectIds(batchInput),
+    await secondConsumer.tasks.listByProjectIds(batchInput),
+  );
+});
+
+test("empty project batches return [] without invoking a data source", async () => {
+  let queryCount = 0;
+  const readRequirements = async (input: { projectIds: string[] }) => {
+    const parsed = ProjectBatchInputSchema.parse(input);
+    if (parsed.projectIds.length === 0) return [];
+    queryCount += 1;
+    return [];
+  };
+  const readTasks = async (input: { projectIds: string[] }) => {
+    const parsed = ProjectBatchInputSchema.parse(input);
+    if (parsed.projectIds.length === 0) return [];
+    queryCount += 1;
+    return [];
+  };
+  const requirements = {
+    listByProjectIds: readRequirements,
+  } satisfies RequirementBatchRepository;
+  const tasks = {
+    listByProjectIds: readTasks,
+  } satisfies TaskBatchRepository;
+
+  assert.deepEqual(await requirements.listByProjectIds({ projectIds: [] }), []);
+  assert.deepEqual(await tasks.listByProjectIds({ projectIds: [] }), []);
+  assert.equal(queryCount, 0);
 });
