@@ -1,15 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 
+import { taskKeys } from "@/features/query/query-keys";
+import { TASK_LIST_QUERY_POLICY } from "@/features/query/query-policy";
 import { useAppServices } from "@/services/app-service-provider";
-
-export const taskKeys = {
-  all: ["tasks"] as const,
-};
 
 export function useTasksQuery() {
   const services = useAppServices();
   return useQuery({
-    queryKey: taskKeys.all,
+    ...TASK_LIST_QUERY_POLICY,
+    queryKey: taskKeys.list({}),
     queryFn: async () => {
       const clients = await services.clients.list();
       const projectGroups = await Promise.all(

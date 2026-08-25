@@ -8,12 +8,14 @@ import {
   type AIExtractionResult,
 } from "@clientflow/contracts";
 
-import { ErrorState, LoadingState } from "@/components/async-state";
+import { EmptyState, ErrorState, LoadingState } from "@/components/async-state";
 import { PlaceholderScreen } from "@/components/placeholder-screen";
 import {
   useConfirmExtractionMutation,
   useExtractionResultQuery,
 } from "@/features/intake/intake-queries";
+import { completeIntakeNavigation } from "@/features/navigation/client-navigation";
+import { resolveReviewScreenState } from "@/features/screen-state/screen-state";
 import { useIntakeFlowStore } from "@/store/intake-flow-store";
 
 const EMPTY_RESULT: AIExtractionResult = {
@@ -41,6 +43,15 @@ export default function IntakeReviewScreen() {
     defaultValues: EMPTY_RESULT,
     resolver: zodResolver(AIExtractionResultSchema),
   });
+  const screenState = resolveReviewScreenState({
+    confirmError:
+      confirmMutation.isError || confirmMutation.data?.status === "failed",
+    hasResult: Boolean(resultQuery.data),
+    isConfirmed: confirmMutation.data?.status === "confirmed",
+    isConfirming: confirmMutation.isPending,
+    isResultError: resultQuery.isError,
+    resultIsNull: resultQuery.data === null,
+  });
 
   useEffect(() => {
     if (resultQuery.data) {
@@ -53,7 +64,7 @@ export default function IntakeReviewScreen() {
       onSuccess: (state) => {
         if (state.status !== "confirmed" || !state.confirmation) return;
         resetIntake();
-        router.replace(`/(app)/clients/${state.confirmation.clientId}`);
+        completeIntakeNavigation(router, state.confirmation.clientId);
       },
     });
   });
@@ -63,9 +74,14 @@ export default function IntakeReviewScreen() {
       title="确认识别结果"
       description="提交前请检查并修改识别内容。"
     >
-      {resultQuery.isPending ? <LoadingState label="正在加载识别结果..." /> : null}
-      {resultQuery.isError ? (
+      {screenState === "initial-loading" ? (
+        <LoadingState label="正在加载识别结果..." />
+      ) : null}
+      {screenState === "error" ? (
         <ErrorState onRetry={() => void resultQuery.refetch()} />
+      ) : null}
+      {screenState === "not-found" ? (
+        <EmptyState label="识别结果不存在或已失效。" />
       ) : null}
       {resultQuery.data ? (
         <>
@@ -254,17 +270,21 @@ export default function IntakeReviewScreen() {
           {Object.keys(formState.errors).length > 0 ? (
             <Text accessibilityRole="alert">请修正表单中的无效内容。</Text>
           ) : null}
-          {confirmMutation.isError || confirmMutation.data?.status === "failed" ? (
+          {screenState === "confirm-error" ? (
             <Text accessibilityRole="alert">
               {confirmMutation.data?.failure?.error.message ?? "创建客户失败，请重试。"}
             </Text>
           ) : null}
           <Button
-            title={confirmMutation.isPending ? "创建中..." : "确认并创建客户"}
-            disabled={confirmMutation.isPending}
+            title={screenState === "confirming" ? "创建中..." : "确认并创建客户"}
+            disabled={screenState === "confirming"}
             onPress={() => void submit()}
           />
-          <Button title="取消" disabled={confirmMutation.isPending} onPress={router.back} />
+          <Button
+            title="取消"
+            disabled={screenState === "confirming"}
+            onPress={router.back}
+          />
         </>
       ) : null}
     </PlaceholderScreen>

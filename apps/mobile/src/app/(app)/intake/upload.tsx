@@ -2,25 +2,29 @@ import { Button, Image, Text } from "react-native";
 
 import { PlaceholderScreen } from "@/components/placeholder-screen";
 import { useIntakeWorkflow } from "@/features/intake/use-intake-workflow";
+import {
+  resolveIntakeScreenState,
+  type IntakeScreenState,
+} from "@/features/screen-state/screen-state";
 
-const STAGE_LABELS = {
+const STAGE_LABELS: Record<IntakeScreenState, string | null> = {
   idle: null,
   selecting: "正在选择图片...",
   compressing: "正在验证并压缩图片...",
   uploading: "正在上传截图...",
   uploaded: "截图已安全上传。",
-  extracting: "AI 正在识别...",
-  awaiting_review: "识别完成，正在进入确认页面...",
+  processing: "AI 正在识别...",
+  "needs-review": "识别完成，正在进入确认页面...",
   confirming: "正在确认...",
   confirmed: "创建完成...",
-  success: "识别完成，正在进入确认页面...",
   failed: null,
-} as const;
+};
 
 export default function IntakeUploadScreen() {
   const workflow = useIntakeWorkflow();
-  const isBusy = ["selecting", "compressing", "uploading", "extracting"].includes(
-    workflow.stage,
+  const screenState = resolveIntakeScreenState(workflow.stage);
+  const isBusy = ["selecting", "compressing", "uploading", "processing"].includes(
+    screenState,
   );
 
   return (
@@ -45,12 +49,12 @@ export default function IntakeUploadScreen() {
           <Text>压缩后：{Math.ceil(workflow.screenshot.byteSize / 1024)} KB</Text>
         </>
       ) : null}
-      {STAGE_LABELS[workflow.stage] ? (
-        <Text accessibilityRole="progressbar">{STAGE_LABELS[workflow.stage]}</Text>
+      {STAGE_LABELS[screenState] ? (
+        <Text accessibilityRole="progressbar">{STAGE_LABELS[screenState]}</Text>
       ) : null}
       {workflow.screenshot &&
       !isBusy &&
-      !["success", "uploaded"].includes(workflow.stage) ? (
+      !["needs-review", "uploaded"].includes(screenState) ? (
         <>
           <Button
             title={workflow.uploadOnly ? "上传截图" : "开始识别"}
